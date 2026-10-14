@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS project_agent_membership_project_agent_idx;
