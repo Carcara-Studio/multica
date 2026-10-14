@@ -1,6 +1,6 @@
 # ADR-011 — Failover concurrency and probe leases
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -78,7 +78,7 @@ Current Multica already uses PostgreSQL locks and leases for distributed work, i
 - Requires careful transaction/lock ordering.
 - Lease timeout must exceed normal probe execution time.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
