@@ -27,6 +27,7 @@ func TestProjectHierarchyMigrationsUpDownUpInIsolatedSchema(t *testing.T) {
 		"576_project_agent_membership_active_root_idx",
 		"577_project_agent_membership_manager_idx",
 		"578_project_agent_membership_workspace_idx",
+		"579_project_agent_membership_primary_key",
 	}
 
 	for _, direction := range []string{"up", "down", "up"} {
@@ -57,7 +58,7 @@ func TestProjectHierarchyMigrationsUpDownUpInIsolatedSchema(t *testing.T) {
 		}
 
 		assertProjectHierarchyTableShape(t, ctx, pool, schema)
-		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_id_idx", true, []string{"(id)"})
+		assertProjectHierarchyPrimaryKey(t, ctx, pool, schema)
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_project_agent_idx", true, []string{"(project_id, agent_id)"})
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_active_root_idx", true, []string{"(project_id)", "manager_membership_id IS NULL", "archived_at IS NULL"})
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_manager_idx", false, []string{"(project_id, manager_membership_id)", "archived_at IS NULL", "manager_membership_id IS NOT NULL"})
@@ -153,6 +154,26 @@ WHERE n.nspname = $1 AND r.relname = 'project_agent_membership' AND NOT t.tgisin
 	}
 }
 
+func assertProjectHierarchyPrimaryKey(t *testing.T, ctx context.Context, pool queryRower, schema string) {
+	t.Helper()
+	var definition string
+	if err := pool.QueryRow(ctx, `
+SELECT pg_get_constraintdef(c.oid)
+FROM pg_constraint c
+JOIN pg_class r ON r.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = r.relnamespace
+WHERE n.nspname = $1
+  AND r.relname = 'project_agent_membership'
+  AND c.conname = 'project_agent_membership_pkey'
+  AND c.contype = 'p'
+`, schema).Scan(&definition); err != nil {
+		t.Fatalf("inspect hierarchy primary key: %v", err)
+	}
+	if !strings.Contains(definition, "PRIMARY KEY (id)") {
+		t.Fatalf("hierarchy primary key definition = %q", definition)
+	}
+}
+
 func assertProjectHierarchyIndex(t *testing.T, ctx context.Context, pool queryRower, schema, name string, wantUnique bool, fragments []string) {
 	t.Helper()
 	var valid, unique bool
@@ -179,8 +200,6 @@ WHERE n.nspname = $1 AND c.relname = $2
 	}
 }
 
-// queryRower is the exact small pgx surface needed by the schema assertions.
-// pgxpool.Pool and pgx.Tx both return pgx.Row from QueryRow.
 type queryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
@@ -242,9 +261,6 @@ VALUES ($1, $2, $3)
 `, ws1, project1, agent2)
 	assertPostgresCode(t, err, "23505", "active-root uniqueness")
 
-	// Historical/archived membership rows are not active roots and may coexist
-	// with the one active root. The Project/Agent uniqueness still applies, so use
-	// a third Agent identity here.
 	if _, err := pool.Exec(ctx, `
 INSERT INTO project_agent_membership (workspace_id, project_id, agent_id, archived_at)
 VALUES ($1, $2, '00000000-0000-0000-0000-000000000303', now())
