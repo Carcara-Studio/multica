@@ -1,6 +1,6 @@
 # ADR-003 — Hierarchy integrity and cycle prevention
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #5
@@ -99,7 +99,7 @@ Without a shared serialization point both validations may pass before either com
 - Only one structural mutation per Project proceeds at a time.
 - Requires disciplined lock ordering for every hierarchy mutation.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
