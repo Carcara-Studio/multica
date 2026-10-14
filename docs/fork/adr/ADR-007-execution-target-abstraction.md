@@ -1,6 +1,6 @@
 # ADR-007 — Execution Target abstraction
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
