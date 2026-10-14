@@ -1,6 +1,6 @@
 # ADR-013 — Cross-provider compatibility policy
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -97,7 +97,7 @@ Examples: drop MCP, ignore thinking level, remove structured-output/tool functio
 - Requires a compatibility layer/matrix where upstream metadata is incomplete.
 - Some theoretically workable combinations will initially be rejected because capability proof is insufficient.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
