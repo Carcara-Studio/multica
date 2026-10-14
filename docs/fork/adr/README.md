@@ -52,18 +52,18 @@ When superseding an ADR, the new ADR must link to the old one and the old ADR mu
 | [ADR-004](ADR-004-hierarchical-delegation-semantics.md) | Hierarchical delegation semantics | Accepted |
 | [ADR-005](ADR-005-escalation-semantics.md) | Escalation semantics | Accepted |
 | [ADR-006](ADR-006-agent-archive-and-hierarchy-consistency.md) | Agent archive and hierarchy consistency | Accepted |
-| [ADR-007](ADR-007-execution-target-abstraction.md) | Execution Target abstraction | Proposed |
-| [ADR-008](ADR-008-canonical-quota-triggered-failover.md) | Canonical quota-triggered failover | Proposed |
-| [ADR-009](ADR-009-persisted-failover-state-machine.md) | Persisted failover state machine | Proposed |
-| [ADR-010](ADR-010-primary-recovery-probe.md) | 30-minute primary recovery probe | Proposed |
-| [ADR-011](ADR-011-failover-concurrency-and-probe-leases.md) | Failover concurrency and probe leases | Proposed |
-| [ADR-012](ADR-012-no-blind-retry-after-ambiguous-partial-execution.md) | No blind retry after ambiguous partial execution | Proposed |
-| [ADR-013](ADR-013-cross-provider-compatibility-policy.md) | Cross-provider compatibility policy | Proposed |
+| [ADR-007](ADR-007-execution-target-abstraction.md) | Execution Target abstraction | Accepted |
+| [ADR-008](ADR-008-canonical-quota-triggered-failover.md) | Canonical quota-triggered failover | Accepted |
+| [ADR-009](ADR-009-persisted-failover-state-machine.md) | Persisted failover state machine | Accepted |
+| [ADR-010](ADR-010-primary-recovery-probe.md) | 30-minute primary recovery probe | Accepted |
+| [ADR-011](ADR-011-failover-concurrency-and-probe-leases.md) | Failover concurrency and probe leases | Accepted |
+| [ADR-012](ADR-012-no-blind-retry-after-ambiguous-partial-execution.md) | No blind retry after ambiguous partial execution | Accepted |
+| [ADR-013](ADR-013-cross-provider-compatibility-policy.md) | Cross-provider compatibility policy | Accepted |
 | ADR-014 | Upstream compatibility strategy | Reserved |
 
 ADR-001 through ADR-006 were accepted by the human maintainer on 2026-10-14 and are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
 
-ADR-007 through ADR-013 are proposed and are not implementation authority until explicitly approved and changed to `Accepted`.
+ADR-007 through ADR-013 were accepted by the human maintainer on 2026-10-14 and are implementation authority for primary/fallback failover work unless superseded by a later accepted ADR.
 
 ## Required Structure
 
