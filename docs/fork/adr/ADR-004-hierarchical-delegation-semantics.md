@@ -1,6 +1,6 @@
 # ADR-004 — Hierarchical delegation semantics
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #5
@@ -70,7 +70,7 @@ The fork needs Project hierarchy to support downward delegation without creating
 - Requires an additive hierarchy-aware delegation API/CLI action.
 - Idempotency and lineage must be made explicit.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
