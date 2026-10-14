@@ -9,6 +9,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`PROJECT_BLUEPRINT.md`](./PROJECT_BLUEPRINT.md) — project mission, confirmed upstream architecture, fork architecture, roadmap, risks, and current decisions.
 - [`GOVERNANCE.md`](./GOVERNANCE.md) — repository governance, protected-branch workflow, and implementation-agent rules.
 - [`UPSTREAM_SYNC.md`](./UPSTREAM_SYNC.md) — policy for continuously incorporating upstream changes while preserving Git ancestry.
+- [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
 ## Authority
@@ -36,6 +37,8 @@ MFK-005 — failover ADRs
 MFK-006 — upstream regression baseline
 MFK-007 — activate Project Hierarchy implementation
 ```
+
+The regression baseline is the merge gate between architecture-only foundation work and the first product implementation phase.
 
 ## Upstream Compatibility Principle
 
