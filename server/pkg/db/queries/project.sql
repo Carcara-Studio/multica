@@ -51,11 +51,13 @@ RETURNING *;
 -- memberships are application-owned (no FK/cascade), so delete them in the
 -- same locked transaction before removing the Project row.
 WITH deleted_hierarchy_memberships AS (
-    DELETE FROM project_agent_membership
-    WHERE project_id = @id AND workspace_id = @workspace_id
+    DELETE FROM project_agent_membership AS pam
+    WHERE pam.project_id = sqlc.arg('id')::uuid
+      AND pam.workspace_id = sqlc.arg('workspace_id')::uuid
 )
-DELETE FROM project
-WHERE id = @id AND workspace_id = @workspace_id;
+DELETE FROM project AS p
+WHERE p.id = sqlc.arg('id')::uuid
+  AND p.workspace_id = sqlc.arg('workspace_id')::uuid;
 
 -- name: CountIssuesByProject :one
 SELECT count(*) FROM issue
