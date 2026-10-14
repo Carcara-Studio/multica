@@ -6,7 +6,7 @@
 > **Reference project:** `paperclipai/paperclip`  
 > **Investigated upstream baseline:** `52b26900c51f759b87707b4ea35fa9f141b83b52`  
 > **Snapshot date:** 2026-10-14  
-> **Current phase:** Foundation → Failover ADRs → Regression baseline → Incremental implementation
+> **Current phase:** Foundation → Regression baseline → Incremental implementation
 
 ---
 
@@ -376,6 +376,8 @@ After activation:
 
 No ambiguous partial execution is blindly replayed on fallback.
 
+These semantics are implementation authority under accepted ADR-007 through ADR-013.
+
 ---
 
 ## 9. Confirmed Upstream Architecture Relevant to Failover
@@ -437,7 +439,7 @@ Critical fact:
 
 > Multica already distinguishes quota/balance exhaustion from transient capacity/rate-limit failures.
 
-Initial failover trigger:
+Accepted v1 failover trigger under ADR-008:
 
 ```text
 route == PRIMARY
@@ -445,7 +447,7 @@ AND
 canonical failure_reason == agent_error.provider_quota_limit
 ```
 
-Do not build a parallel quota classifier unless upstream evidence later proves the canonical taxonomy insufficient.
+Do not build a parallel quota classifier unless upstream evidence later proves the canonical taxonomy insufficient and a later ADR authorizes a policy change.
 
 ### 9.3 Daemon control plane
 
@@ -470,7 +472,7 @@ daemon executes local/provider operation
 daemon reports result to server
 ```
 
-This is the preferred conceptual precedent for primary recovery probes.
+This is the accepted conceptual precedent for primary recovery probes under ADR-010.
 
 Multica also already uses durable PostgreSQL worker patterns including `FOR UPDATE SKIP LOCKED` in distributed work.
 
@@ -478,9 +480,11 @@ Multica also already uses durable PostgreSQL worker patterns including `FOR UPDA
 
 ## 10. Recommended Failover Data Model
 
+### Accepted architectural direction
+
 Keep existing Agent execution fields as the primary configuration for backward compatibility.
 
-### Proposed fallback configuration
+### Proposed fallback configuration shape
 
 ```text
 agent_fallback_config
@@ -498,7 +502,7 @@ updated_at
 
 Secret-bearing configuration should reuse existing Multica credential/environment mechanisms rather than creating a parallel secret system.
 
-### Proposed operational state
+### Proposed operational state shape
 
 ```text
 agent_failover_state
@@ -525,11 +529,13 @@ FALLBACK_ACTIVE
 PRIMARY_PROBING
 ```
 
-Configuration and operational state should remain separate because state changes frequently while configuration does not.
+Configuration and operational state remain separate under ADR-009. Exact table/column names remain implementation proposals pending current migration and runtime revalidation.
 
 ---
 
 ## 11. Failover State Machine
+
+Accepted under ADR-008 and ADR-009:
 
 ```text
 PRIMARY_ACTIVE
@@ -549,7 +555,7 @@ PRIMARY_PROBING
    +-- transient/inconclusive failure -> FALLBACK_ACTIVE + 30m
 ```
 
-Initial trigger policy:
+V1 trigger policy:
 
 | Failure | Activate fallback? |
 |---|---|
@@ -564,13 +570,13 @@ Initial trigger policy:
 | invalid model/config | no |
 | internal Agent/process failure | no |
 
-Existing upstream retry behavior must remain independent from the new failover policy unless an ADR explicitly changes it.
+Existing upstream retry behavior remains independent from the new failover policy unless a later accepted ADR explicitly changes it.
 
 ---
 
 ## 12. Execution Continuity and Side-effect Safety
 
-A quota failure does **not** automatically mean the current task is safe to replay.
+ADR-012 establishes that a quota failure does **not** automatically mean the current task is safe to replay.
 
 Potential side effects include:
 
@@ -582,7 +588,7 @@ Potential side effects include:
 - comments/messages;
 - provider-specific tool execution.
 
-Initial safety rule:
+Accepted safety rule:
 
 ```text
 primary execution fails with quota
@@ -592,7 +598,7 @@ activate fallback for future executions
 do not blindly replay the failed execution
 ```
 
-A future optimization may allow immediate replay only if a runtime/provider adapter can prove that the request was rejected before generation/tool/side-effect execution.
+A future optimization may allow immediate replay only if a runtime/provider adapter can prove that the request was rejected before generation/tool/side-effect execution, and that change requires a separate accepted ADR.
 
 ---
 
@@ -609,9 +615,9 @@ Primary recovers before Task A is claimed
 
 Task A must still use the target chosen when it was routed.
 
-Preferred additive direction is a small side table rather than adding multiple fork-specific columns to a central upstream queue table.
+ADR-007 accepts an additive per-task route identity while reusing the existing persisted task `runtime_id`.
 
-Conceptual proposal:
+Preferred conceptual shape:
 
 ```text
 agent_task_execution_route
@@ -622,15 +628,15 @@ route
 
 Absence means the normal primary/upstream route. A fallback route is persisted transactionally with task creation/routing.
 
-Exact integration points must be re-investigated before implementation.
+Exact table naming and integration points must be re-investigated before implementation.
 
 ---
 
 ## 14. 30-minute Primary Recovery Probe
 
-Probe scheduling belongs to the server/control plane. Probe execution belongs to the daemon/runtime.
+ADR-010 and ADR-011 establish that probe scheduling belongs to the server/control plane while probe execution belongs to the daemon/runtime.
 
-Recommended flow:
+Accepted flow:
 
 ```text
 FALLBACK_ACTIVE and next_probe_at <= now
@@ -661,17 +667,17 @@ Probe requirements:
 - no external side effects;
 - excluded from normal user execution/activity metrics.
 
-Proposed protocol names such as `pending_primary_probe` or capability `primary-probe-v1` are **not upstream facts** and must be finalized by ADR/API design.
+Proposed protocol names such as `pending_primary_probe` or capability `primary-probe-v1` are **not upstream facts** and remain implementation details.
 
 Late results from expired claims must not restore primary.
 
-Old daemons without probe capability should remain compatible; fallback stays active and recovery status must explain that automatic probing is unavailable.
+Old daemons without probe capability remain compatible; fallback stays active and recovery status must explain that automatic probing is unavailable.
 
 ---
 
 ## 15. Cross-provider Fallback
 
-Cross-provider fallback is an architectural goal.
+ADR-013 accepts cross-provider fallback when a deterministic compatibility contract passes.
 
 Validation must cover more than model identity:
 
@@ -685,9 +691,9 @@ Validation must cover more than model identity:
 - multimodal capability;
 - runtime-specific configuration.
 
-If the fallback cannot satisfy capabilities required by the execution, fail closed before partial work rather than silently degrading behavior.
+If the fallback cannot satisfy capabilities required by the execution, or a required capability cannot be established reliably, fail closed before partial work rather than silently degrading behavior.
 
-Fallback quota exhaustion must not cause uncontrolled ping-pong to primary. Primary recovery continues through the probe mechanism.
+Fallback quota exhaustion does not cause uncontrolled ping-pong to primary. Primary recovery continues through the probe mechanism.
 
 ---
 
@@ -708,6 +714,8 @@ Fallback quota exhaustion must not cause uncontrolled ping-pong to primary. Prim
 - state survives server/daemon restart;
 - a task already routed to fallback remains fallback after recovery;
 - already-running fallback work is not interrupted by primary recovery.
+
+These failover concurrency invariants are implementation authority under ADR-011.
 
 ---
 
@@ -842,25 +850,25 @@ ADR-006 — Agent archive and hierarchy consistency               ACCEPTED
 
 These six ADRs are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
 
-### Reserved Failover ADRs
+### Accepted Failover ADRs — 2026-10-14
 
 ```text
-ADR-007 — Execution Target abstraction
-ADR-008 — Canonical quota-triggered failover
-ADR-009 — Persisted failover state machine
-ADR-010 — 30-minute primary recovery probe
-ADR-011 — Failover concurrency and probe leases
-ADR-012 — No blind retry after ambiguous partial execution
-ADR-013 — Cross-provider compatibility policy
+ADR-007 — Execution Target abstraction                          ACCEPTED
+ADR-008 — Canonical quota-triggered failover                    ACCEPTED
+ADR-009 — Persisted failover state machine                      ACCEPTED
+ADR-010 — 30-minute primary recovery probe                      ACCEPTED
+ADR-011 — Failover concurrency and probe leases                 ACCEPTED
+ADR-012 — No blind retry after ambiguous partial execution      ACCEPTED
+ADR-013 — Cross-provider compatibility policy                   ACCEPTED
 ```
+
+These seven ADRs are implementation authority for primary/fallback failover work unless superseded by a later accepted ADR.
 
 ### Governance
 
 ```text
 ADR-014 — Upstream compatibility strategy
 ```
-
-ADRs become implementation authority only after status `Accepted`.
 
 ---
 
@@ -873,8 +881,8 @@ MFK-001 — Create and configure upstream-compatible fork                DONE
 MFK-002 — Establish repository governance and sync policy              DONE
 MFK-003 — Add fork architecture and decision documentation             DONE
 MFK-004 — Record hierarchy ADRs                                        DONE
-MFK-005 — Record failover ADRs                                         NEXT
-MFK-006 — Establish upstream regression baseline
+MFK-005 — Record failover ADRs                                         DONE
+MFK-006 — Establish upstream regression baseline                       NEXT
 MFK-007 — Activate Project Hierarchy implementation
 ```
 
@@ -954,13 +962,22 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 - leaf hierarchy memberships may deactivate atomically with Agent archive;
 - restoring an Agent does not reactivate old memberships automatically.
 
-### High-confidence failover architecture inference pending ADR acceptance
+### Accepted Primary/Fallback failover decisions
 
-- fallback should be an Execution Target abstraction;
-- failover should react to canonical failure classification;
-- fallback config and operational state should be separate;
-- probe is control-plane work;
-- failover state and task route must be durable.
+- existing Agent execution fields remain the canonical primary target;
+- fallback is an optional additive execution target, not a second Agent;
+- fallback route choice is durable per task while reusing existing persisted `task.runtime_id`;
+- automatic failover activates only for primary canonical `agent_error.provider_quota_limit` with a valid fallback;
+- ordinary upstream retry policy remains separate and unchanged;
+- failover configuration and operational state are persisted separately;
+- normal user work remains on fallback while primary is being probed;
+- primary recovery is proven only by a successful minimal primary inference probe;
+- probes run every 30 minutes, are control-plane work, and use durable token/lease fencing;
+- stale/duplicate probe results are no-ops;
+- the quota-triggering task is not blindly replayed onto fallback;
+- same- and cross-provider fallback require deterministic compatibility validation;
+- known incompatibility or unknown required capability fails closed;
+- cross-runtime/provider fallback never reuses a primary provider session.
 
 ### Must be revalidated before implementation
 
@@ -1008,19 +1025,20 @@ After the process stabilizes, development may move to a controlled Multica Squad
 
 ## 25. Current Foundation Status
 
-Completed in repository history or by this MFK-004 change set:
+Completed in repository history or by this MFK-005 change set:
 
 ```text
 MFK-001 — fork baseline and origin/upstream setup
 MFK-002 — main protection, governance, upstream sync policy
 MFK-003 — repository-resident architecture and ADR conventions
 MFK-004 — Project Hierarchy ADR-001 through ADR-006 accepted
+MFK-005 — Primary/Fallback ADR-007 through ADR-013 accepted
 ```
 
-Fork base for MFK-004:
+Fork base for MFK-005:
 
 ```text
-286531f7c6f0e9cc5c1884b159dd303a3091778d
+feadd478fb90abddd0aea64e66ae6616add7ac27
 ```
 
 Current investigated upstream `main`:
@@ -1031,7 +1049,7 @@ Current investigated upstream `main`:
 
 No fork-specific product behavior has been implemented yet.
 
-The immediate next architectural work after MFK-004 is MFK-005: write and review the failover ADR set, followed by the upstream regression baseline.
+The immediate next foundation work after MFK-005 is MFK-006: establish the upstream regression baseline before any hierarchy implementation begins.
 
 ---
 
