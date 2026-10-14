@@ -22,11 +22,11 @@ For fork-specific structural decisions, use the following order:
 4. `PROJECT_BLUEPRINT.md`;
 5. implementation notes.
 
-If current upstream behavior contradicts an assumption in the blueprint or an ADR, investigate the upstream change before implementation. Accepted ADRs may need to be superseded when new evidence invalidates them.
+If current upstream behavior contradicts an assumption in the blueprint or an ADR, investigate the upstream change before implementation. Accepted ADRs may need to be superseded or narrowed when new evidence invalidates an implementation mechanism while leaving the underlying domain decision intact.
 
 ## Current Phase
 
-Foundation architecture and the upstream regression baseline are established. No fork-specific product behavior has been implemented yet.
+Foundation architecture and the upstream regression baseline are established. Project Hierarchy implementation activation is now in progress, but no fork-specific product behavior has been implemented yet.
 
 Current sequence:
 
@@ -35,10 +35,15 @@ MFK-003 — architecture documentation                 DONE
 MFK-004 — hierarchy ADRs                             DONE
 MFK-005 — failover ADRs                              DONE
 MFK-006 — upstream regression baseline               DONE
-MFK-007 — activate Project Hierarchy implementation  NEXT
+MFK-007 — activate Project Hierarchy implementation  ACTIVE — ADR-014 APPROVAL GATE
+HIER-001 — Project hierarchy schema                  BLOCKED BY MFK-007 / ADR-014
 ```
 
-`REGRESSION_BASELINE.md` is the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
+`REGRESSION_BASELINE.md` remains the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
+
+Implementation-time revalidation also found current upstream database rules that prohibit new foreign keys/cascades and require every new index to use its own concurrent-index migration. [`ADR-014`](./adr/ADR-014-upstream-compatibility-strategy.md) is proposed to make those current upstream engineering contracts authoritative for fork implementation while preserving the semantic invariants of earlier hierarchy ADRs.
+
+No HIER-001 product branch should begin until ADR-014 is accepted and MFK-007 is merged.
 
 ## Upstream Compatibility Principle
 
