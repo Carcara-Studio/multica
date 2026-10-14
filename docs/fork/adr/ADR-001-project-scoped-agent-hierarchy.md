@@ -99,7 +99,7 @@ The hierarchy therefore belongs to the Project participation, not to the global 
 - Requires new integrity logic for roots, cycles and concurrent reparenting.
 - Adds another domain object and API surface.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ### Alternative D — Closure table as the primary hierarchy model
 
