@@ -1,6 +1,6 @@
 # ADR-002 — Squad remains workspace-scoped and separate from Project Hierarchy
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #5
@@ -100,7 +100,7 @@ The hierarchy requirement, by contrast, is Project-scoped. The same Agents can h
 - Runtime/briefing logic must understand both concepts where they intersect.
 - UI must communicate that Squad role and Project position are different concepts.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
