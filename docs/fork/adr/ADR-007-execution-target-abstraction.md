@@ -127,7 +127,7 @@ When quota failover is active, future work must use the fallback without:
 - Claim-time code must understand a fallback route.
 - Multiple enqueue paths must use one target resolver rather than reading `agent.runtime_id` directly.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
