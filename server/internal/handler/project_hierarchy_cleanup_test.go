@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 func insertHierarchyTestProject(t *testing.T, workspaceID, title string) string {
@@ -143,5 +145,64 @@ VALUES ($1, $2, 'owner')
 	}
 	if victimWorkspaceExists {
 		t.Fatal("victim Workspace still exists after successful deletion")
+	}
+}
+
+func TestProjectHierarchyCleanupRollsBackWithOwnerDeletion(t *testing.T) {
+	if testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	projectID := insertHierarchyTestProject(t, testWorkspaceID, "Hierarchy rollback project")
+	membershipID := insertHierarchyTestMembership(t, testWorkspaceID, projectID)
+
+	t.Cleanup(func() {
+		bg := context.Background()
+		_, _ = testPool.Exec(bg, `DELETE FROM project_agent_membership WHERE id = $1`, membershipID)
+		_, _ = testPool.Exec(bg, `DELETE FROM project WHERE id = $1`, projectID)
+	})
+
+	tx, err := testPool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin rollback test: %v", err)
+	}
+	qtx := testHandler.Queries.WithTx(tx)
+	if _, err := qtx.LockProjectForDelete(ctx, db.LockProjectForDeleteParams{
+		ID:          parseUUID(projectID),
+		WorkspaceID: parseUUID(testWorkspaceID),
+	}); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("lock Project: %v", err)
+	}
+	if err := qtx.DeleteProject(ctx, db.DeleteProjectParams{
+		ID:          parseUUID(projectID),
+		WorkspaceID: parseUUID(testWorkspaceID),
+	}); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("delete Project in rollback test: %v", err)
+	}
+
+	var membershipVisibleInTx bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM project_agent_membership WHERE id = $1)`, membershipID).Scan(&membershipVisibleInTx); err != nil {
+		_ = tx.Rollback(ctx)
+		t.Fatalf("inspect membership inside delete transaction: %v", err)
+	}
+	if membershipVisibleInTx {
+		_ = tx.Rollback(ctx)
+		t.Fatal("hierarchy membership was not removed inside Project delete transaction")
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback Project delete: %v", err)
+	}
+
+	if !hierarchyMembershipExists(t, membershipID) {
+		t.Fatal("hierarchy membership did not roll back with Project deletion")
+	}
+	var projectExists bool
+	if err := testPool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM project WHERE id = $1)`, projectID).Scan(&projectExists); err != nil {
+		t.Fatalf("check Project after rollback: %v", err)
+	}
+	if !projectExists {
+		t.Fatal("Project did not roll back with hierarchy cleanup")
 	}
 }
