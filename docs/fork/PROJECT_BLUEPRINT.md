@@ -1,12 +1,12 @@
 # Multica Fork — Project Blueprint
 
-> **Status:** Foundation / Architecture documentation  
+> **Status:** Foundation complete / Project Hierarchy implementation activation  
 > **Fork:** `Carcara-Studio/multica`  
 > **Upstream:** `multica-ai/multica`  
 > **Reference project:** `paperclipai/paperclip`  
 > **Investigated upstream baseline:** `52b26900c51f759b87707b4ea35fa9f141b83b52`  
 > **Snapshot date:** 2026-10-14  
-> **Current phase:** Foundation complete → Project Hierarchy implementation
+> **Current phase:** MFK-007 ready for merge → HIER-001 next
 
 ---
 
@@ -202,49 +202,58 @@ This existing machinery should be reused for hierarchical delegation/completion 
 
 Introduce a Project-scoped Agent membership entity rather than adding `manager_id` to the global Agent.
 
-Conceptual table:
+Current minimal HIER-001 shape under accepted ADR-014:
 
 ```text
 project_agent_membership
 ------------------------
-id
-project_id
-agent_id
-manager_membership_id nullable
-title
-operational_role
-sort_order nullable
-archived_at nullable
-created_at
-updated_at
+id UUID PK
+workspace_id UUID NOT NULL
+project_id UUID NOT NULL
+agent_id UUID NOT NULL
+manager_membership_id UUID NULL
+title TEXT NOT NULL DEFAULT ''
+archived_at TIMESTAMPTZ NULL
+created_at TIMESTAMPTZ NOT NULL
+updated_at TIMESTAMPTZ NOT NULL
 ```
 
-The manager reference targets another **membership**, not the global Agent.
+`operational_role`, `sort_order` and stored hierarchy depth are deferred until a concrete consumer justifies them.
+
+The manager identifier targets another **membership**, not the global Agent. Under current upstream repository policy this relationship is application-owned rather than a new foreign key.
 
 This expresses:
 
 > this Agent, in this Project participation, reports to this other Project participation.
 
-### Required database invariants
+### Required persistence invariants
 
-Conceptually:
+Current upstream `AGENTS.md` forbids new foreign keys/cascades and requires migration-created indexes to use their own `CREATE [UNIQUE] INDEX CONCURRENTLY` migrations. ADR-014 makes those rules implementation authority for the fork.
 
-```text
-UNIQUE(project_id, agent_id)
-```
-
-Manager must belong to the same Project, preferably enforced with a composite relationship such as:
+Database-local invariants therefore use row checks and concurrent indexes, conceptually:
 
 ```text
-(project_id, manager_membership_id)
-→ (project_id, id)
+CHECK (manager_membership_id IS NULL OR manager_membership_id <> id)
+UNIQUE INDEX (project_id, agent_id)
+UNIQUE INDEX (project_id)
+  WHERE manager_membership_id IS NULL
+    AND archived_at IS NULL
 ```
 
-Self-reference must be rejected.
+Additional concurrent indexes support active direct-report lookup and Workspace cleanup.
 
-A partial unique index should enforce one active root per Project.
+The authoritative hierarchy service transaction must validate all contextual relationships:
 
-The structural decisions above are accepted by ADR-001 and ADR-003. Exact table, column, constraint and index names remain implementation proposals and must be revalidated against the current upstream migration conventions before code is written.
+- Project exists and belongs to the expected Workspace;
+- Agent exists, is eligible and belongs to the same Workspace;
+- manager membership exists, is active and belongs to the same Project;
+- non-empty active hierarchy has exactly one root;
+- graph is acyclic;
+- lifecycle operations do not orphan descendants.
+
+Project and Workspace deletion explicitly remove hierarchy rows in their existing locked deletion transactions. No cascade silently mutates or cleans the hierarchy.
+
+The structural decisions are governed jointly by ADR-001, ADR-003 and ADR-014. Exact migration/index names remain implementation proposals and must be revalidated against the current upstream migration head immediately before implementation and merge.
 
 ---
 
@@ -287,7 +296,7 @@ Removal policy direction:
 - Agent archival must fail closed when it would leave active descendants under an unusable manager/root;
 - no silent reparenting.
 
-These invariants are implementation authority under accepted ADR-003 and ADR-006.
+These invariants are implementation authority under accepted ADR-003, ADR-006 and ADR-014.
 
 ---
 
@@ -802,7 +811,8 @@ Required coverage includes:
 - direct Agent assignment + hierarchy;
 - delegation idempotency;
 - child completion wakeup to manager;
-- escalation one edge at a time.
+- escalation one edge at a time;
+- explicit Project/Workspace cleanup because hierarchy relationships are application-owned.
 
 ### Failover
 
@@ -850,7 +860,7 @@ ADR-005 — Escalation semantics                                  ACCEPTED
 ADR-006 — Agent archive and hierarchy consistency               ACCEPTED
 ```
 
-These six ADRs are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
+These six ADRs are implementation authority for Project Hierarchy domain semantics unless superseded or narrowed by a later accepted ADR.
 
 ### Accepted Failover ADRs — 2026-10-14
 
@@ -864,19 +874,21 @@ ADR-012 — No blind retry after ambiguous partial execution      ACCEPTED
 ADR-013 — Cross-provider compatibility policy                   ACCEPTED
 ```
 
-These seven ADRs are implementation authority for primary/fallback failover work unless superseded by a later accepted ADR.
+These seven ADRs are implementation authority for primary/fallback failover work unless superseded or narrowed by a later accepted ADR.
 
-### Governance
+### Accepted Governance / Upstream Compatibility ADR — 2026-10-14
 
 ```text
-ADR-014 — Upstream compatibility strategy
+ADR-014 — Upstream compatibility strategy                       ACCEPTED
 ```
+
+ADR-014 governs implementation mechanics where an older ADR proposal conflicts with current upstream repository rules. In particular, new fork relationships remain application-owned while current upstream policy forbids new FKs/cascades, and new migration indexes use separate concurrent-index migrations. It does not weaken the accepted hierarchy/failover domain invariants.
 
 ---
 
 ## 22. Technical Backlog
 
-### Foundation
+### Foundation / Activation
 
 ```text
 MFK-001 — Create and configure upstream-compatible fork                DONE
@@ -885,13 +897,13 @@ MFK-003 — Add fork architecture and decision documentation             DONE
 MFK-004 — Record hierarchy ADRs                                        DONE
 MFK-005 — Record failover ADRs                                         DONE
 MFK-006 — Establish upstream regression baseline                       DONE
-MFK-007 — Activate Project Hierarchy implementation                    NEXT
+MFK-007 — Activate Project Hierarchy implementation                    READY FOR MERGE
 ```
 
 ### Hierarchy
 
 ```text
-HIER-001 — Introduce Project hierarchy schema
+HIER-001 — Introduce Project hierarchy schema                          BLOCKED UNTIL MFK-007 MERGES
 HIER-002 — Implement ProjectHierarchyService
 HIER-003 — Enforce cycle-safe concurrent mutations
 HIER-004 — Implement hierarchy API
@@ -904,6 +916,8 @@ HIER-010 — Protect Agent archive from hierarchy corruption
 HIER-011 — Add Project hierarchy Web UI
 HIER-012 — Add Mobile hierarchy support
 ```
+
+HIER-001 is Issue #14. Its data-model scope is intentionally minimal and must revalidate upstream HEAD/migration head before implementation and merge. Assuming upstream remains at `572_*`, `573` is only a candidate first fork migration number, not a reservation.
 
 ### Failover
 
@@ -944,7 +958,10 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 - canonical provider failure classification exists;
 - quota and capacity/rate-limit are distinct failure reasons;
 - daemon heartbeat already carries control-plane requests;
-- upstream uses PostgreSQL durable worker locking patterns.
+- upstream uses PostgreSQL durable worker locking patterns;
+- current upstream `AGENTS.md` forbids new foreign keys/cascades and owns new relationships in application code;
+- current upstream `AGENTS.md` requires every migration-created index to use its own `CREATE [UNIQUE] INDEX CONCURRENTLY` migration;
+- Project and Workspace deletion already use locked transactional/application-owned cleanup graphs.
 
 ### Accepted Project Hierarchy decisions
 
@@ -963,6 +980,16 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 - manager/root Agent archival fails closed until explicit reorganization;
 - leaf hierarchy memberships may deactivate atomically with Agent archive;
 - restoring an Agent does not reactivate old memberships automatically.
+
+### Accepted upstream-compatibility implementation decisions
+
+- current upstream repository engineering rules constrain fork implementation unless a later accepted ADR documents an exception;
+- new hierarchy/failover relationship identifiers are application-owned rather than new FKs/cascades while current upstream policy forbids them;
+- DB-local hierarchy integrity uses row checks and concurrent unique/partial indexes;
+- contextual relationship integrity is enforced by authoritative transactional services;
+- Project/Workspace hierarchy cleanup joins existing locked deletion transactions;
+- every new hierarchy index uses a separate concurrent-index migration and participates in upstream invalid-index cleanup conventions;
+- migration numbers are revalidated before implementation and merge rather than permanently reserved by the fork.
 
 ### Accepted Primary/Fallback failover decisions
 
@@ -1032,9 +1059,9 @@ After the process stabilizes, development may move to a controlled Multica Squad
 
 ---
 
-## 25. Current Foundation Status
+## 25. Current Foundation / Activation Status
 
-Completed in repository history or by this MFK-006 change set:
+Completed in repository history:
 
 ```text
 MFK-001 — fork baseline and origin/upstream setup
@@ -1045,10 +1072,18 @@ MFK-005 — Primary/Fallback ADR-007 through ADR-013 accepted
 MFK-006 — Upstream regression baseline and pre-implementation gates established
 ```
 
-Fork base for MFK-006:
+MFK-007 activation is complete at the architectural/documentation level and awaiting merge:
 
 ```text
-0b233f5e72234c5c5cb8f063a983657578ebf0ed
+ADR-014 — Upstream compatibility strategy accepted
+Issue #14 — HIER-001 created and blocked until MFK-007 merges
+No product migration/schema/runtime behavior implemented yet
+```
+
+Fork `main` base for MFK-007:
+
+```text
+4009d06d3f5fcf2ad5fbf6f226cb89ae701f698f
 ```
 
 Current investigated upstream `main`:
@@ -1057,9 +1092,13 @@ Current investigated upstream `main`:
 52b26900c51f759b87707b4ea35fa9f141b83b52
 ```
 
-No fork-specific product behavior has been implemented yet.
+Observed upstream migration head at activation review:
 
-The immediate next work after MFK-006 is MFK-007: activate Project Hierarchy implementation, beginning with the data-model phase and the regression gates defined in `docs/fork/REGRESSION_BASELINE.md`.
+```text
+572_*
+```
+
+The immediate next product work after MFK-007 merges is HIER-001: introduce the minimal Project hierarchy persistence model and lifecycle cleanup plumbing while preserving the regression gates in `docs/fork/REGRESSION_BASELINE.md`.
 
 ---
 
