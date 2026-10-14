@@ -1,6 +1,6 @@
 # ADR-010 — 30-minute primary recovery probe
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -93,7 +93,7 @@ The server cannot assume it can call the runtime/provider directly.
 - Requires a new optional daemon/server protocol capability.
 - Costs a small provider request every 30 minutes while fallback remains active.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
