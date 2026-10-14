@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -91,23 +92,18 @@ WHERE n.nspname = $1 AND c.relname = $2
 	}
 }
 
-// queryRower is the small surface needed by assertProjectHierarchyIndex. Both
-// pgxpool.Pool and pgx.Tx satisfy it, keeping the assertion independent from a
-// concrete connection type.
+// queryRower is the exact small pgx surface needed by the index assertion.
+// pgxpool.Pool and pgx.Tx both return pgx.Row from QueryRow.
 type queryRower interface {
-	QueryRow(context.Context, string, ...any) rowScanner
-}
-
-type rowScanner interface {
-	Scan(...any) error
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 func assertHierarchyConstraintErrors(t *testing.T, ctx context.Context, pool execQuerier) {
 	t.Helper()
 
 	const (
-		ws1     = "00000000-0000-0000-0000-000000000101"
-		ws2     = "00000000-0000-0000-0000-000000000102"
+		ws1      = "00000000-0000-0000-0000-000000000101"
+		ws2      = "00000000-0000-0000-0000-000000000102"
 		project1 = "00000000-0000-0000-0000-000000000201"
 		project2 = "00000000-0000-0000-0000-000000000202"
 		agent1   = "00000000-0000-0000-0000-000000000301"
