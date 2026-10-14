@@ -42,6 +42,27 @@ Each ADR must use one of:
 
 When superseding an ADR, the new ADR must link to the old one and the old ADR must identify its replacement.
 
+## Current ADRs
+
+| ADR | Decision | Status |
+| --- | --- | --- |
+| [ADR-001](ADR-001-project-scoped-agent-hierarchy.md) | Project-scoped Agent Hierarchy | Accepted |
+| [ADR-002](ADR-002-squad-remains-workspace-scoped.md) | Squad remains workspace-scoped and separate from Project Hierarchy | Accepted |
+| [ADR-003](ADR-003-hierarchy-integrity-and-cycle-prevention.md) | Hierarchy integrity and cycle prevention | Accepted |
+| [ADR-004](ADR-004-hierarchical-delegation-semantics.md) | Hierarchical delegation semantics | Accepted |
+| [ADR-005](ADR-005-escalation-semantics.md) | Escalation semantics | Accepted |
+| [ADR-006](ADR-006-agent-archive-and-hierarchy-consistency.md) | Agent archive and hierarchy consistency | Accepted |
+| ADR-007 | Execution Target abstraction | Reserved |
+| ADR-008 | Canonical quota-triggered failover | Reserved |
+| ADR-009 | Persisted failover state machine | Reserved |
+| ADR-010 | 30-minute primary recovery probe | Reserved |
+| ADR-011 | Failover concurrency and probe leases | Reserved |
+| ADR-012 | No blind retry after ambiguous partial execution | Reserved |
+| ADR-013 | Cross-provider compatibility policy | Reserved |
+| ADR-014 | Upstream compatibility strategy | Reserved |
+
+ADR-001 through ADR-006 were accepted by the human maintainer on 2026-10-14 and are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
+
 ## Required Structure
 
 Use this template:

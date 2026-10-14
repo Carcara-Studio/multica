@@ -6,7 +6,7 @@
 > **Reference project:** `paperclipai/paperclip`  
 > **Investigated upstream baseline:** `52b26900c51f759b87707b4ea35fa9f141b83b52`  
 > **Snapshot date:** 2026-10-14  
-> **Current phase:** Foundation → ADRs → Regression baseline → Incremental implementation
+> **Current phase:** Foundation → Failover ADRs → Regression baseline → Incremental implementation
 
 ---
 
@@ -198,7 +198,7 @@ This existing machinery should be reused for hierarchical delegation/completion 
 
 ## 5. Recommended Hierarchy Data Model
 
-### Proposal
+### Accepted architectural direction
 
 Introduce a Project-scoped Agent membership entity rather than adding `manager_id` to the global Agent.
 
@@ -244,7 +244,7 @@ Self-reference must be rejected.
 
 A partial unique index should enforce one active root per Project.
 
-Exact table/constraint names are **proposals** until the hierarchy ADRs are accepted and the current migration sequence is revalidated.
+The structural decisions above are accepted by ADR-001 and ADR-003. Exact table, column, constraint and index names remain implementation proposals and must be revalidated against the current upstream migration conventions before code is written.
 
 ---
 
@@ -287,6 +287,8 @@ Removal policy direction:
 - Agent archival must fail closed when it would leave active descendants under an unusable manager/root;
 - no silent reparenting.
 
+These invariants are implementation authority under accepted ADR-003 and ADR-006.
+
 ---
 
 ## 7. Hierarchy Runtime Semantics
@@ -319,9 +321,11 @@ If the Issue has `project_id`, resolve the executing leader's Project membership
 
 Do not automatically replace the Squad leader with the Project hierarchy root.
 
+This separation is governed by accepted ADR-002.
+
 ### Hierarchical delegation
 
-Preferred direction:
+Accepted direction under ADR-004:
 
 ```text
 manager receives work
@@ -339,11 +343,11 @@ existing child completion wakeup
 manager reviews result
 ```
 
-Ordinary `@mention` remains a collaboration mechanism; it should not automatically be redefined as organizational delegation.
+Ordinary `@mention` remains a collaboration mechanism; it is not organizational delegation.
 
 ### Escalation
 
-Escalation should move one edge at a time:
+Accepted ADR-005 requires escalation to move one edge at a time:
 
 ```text
 Worker → Manager → Manager's Manager → Root → Human boundary
@@ -823,22 +827,22 @@ Pin unchanged upstream behavior for:
 
 ---
 
-## 21. ADR Plan
+## 21. ADR Status
 
-The initial ADR numbering is reserved as follows.
-
-### Hierarchy
+### Accepted Project Hierarchy ADRs — 2026-10-14
 
 ```text
-ADR-001 — Project-scoped Agent Hierarchy
-ADR-002 — Squad remains workspace-scoped
-ADR-003 — Hierarchy integrity and cycle prevention
-ADR-004 — Hierarchical delegation semantics
-ADR-005 — Escalation semantics
-ADR-006 — Agent archive and hierarchy consistency
+ADR-001 — Project-scoped Agent Hierarchy                         ACCEPTED
+ADR-002 — Squad remains workspace-scoped                        ACCEPTED
+ADR-003 — Hierarchy integrity and cycle prevention              ACCEPTED
+ADR-004 — Hierarchical delegation semantics                     ACCEPTED
+ADR-005 — Escalation semantics                                  ACCEPTED
+ADR-006 — Agent archive and hierarchy consistency               ACCEPTED
 ```
 
-### Failover
+These six ADRs are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
+
+### Reserved Failover ADRs
 
 ```text
 ADR-007 — Execution Target abstraction
@@ -867,9 +871,9 @@ ADRs become implementation authority only after status `Accepted`.
 ```text
 MFK-001 — Create and configure upstream-compatible fork                DONE
 MFK-002 — Establish repository governance and sync policy              DONE
-MFK-003 — Add fork architecture and decision documentation             ACTIVE
-MFK-004 — Record hierarchy ADRs                                        NEXT
-MFK-005 — Record failover ADRs
+MFK-003 — Add fork architecture and decision documentation             DONE
+MFK-004 — Record hierarchy ADRs                                        DONE
+MFK-005 — Record failover ADRs                                         NEXT
 MFK-006 — Establish upstream regression baseline
 MFK-007 — Activate Project Hierarchy implementation
 ```
@@ -932,15 +936,26 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 - daemon heartbeat already carries control-plane requests;
 - upstream uses PostgreSQL durable worker locking patterns.
 
-### High-confidence architecture inference
+### Accepted Project Hierarchy decisions
 
-- hierarchy should be a separate Project-scoped domain;
+- hierarchy is a separate Project-scoped membership domain;
 - global Agent manager is incorrect for the requirement;
 - Project lead is not automatically hierarchy root;
+- Squad remains workspace-scoped and separate from Project Hierarchy;
 - hierarchy is not a new assignee type;
-- adjacency-list membership is appropriate;
-- structural hierarchy mutations require serialization;
-- delegation should reuse Issues/sub-issues where possible;
+- adjacency-list membership is the v1 structural model;
+- structural hierarchy mutations serialize on the Project row;
+- delegation moves one direct-report edge at a time and reuses child Issues;
+- escalation moves one direct-manager edge at a time;
+- unavailable managers are not silently skipped;
+- root escalation terminates at a human/project intervention boundary;
+- manager/root removal never silently reparents descendants;
+- manager/root Agent archival fails closed until explicit reorganization;
+- leaf hierarchy memberships may deactivate atomically with Agent archive;
+- restoring an Agent does not reactivate old memberships automatically.
+
+### High-confidence failover architecture inference pending ADR acceptance
+
 - fallback should be an Execution Target abstraction;
 - failover should react to canonical failure classification;
 - fallback config and operational state should be separate;
@@ -993,17 +1008,19 @@ After the process stabilizes, development may move to a controlled Multica Squad
 
 ## 25. Current Foundation Status
 
-Completed:
+Completed in repository history or by this MFK-004 change set:
 
 ```text
 MFK-001 — fork baseline and origin/upstream setup
 MFK-002 — main protection, governance, upstream sync policy
+MFK-003 — repository-resident architecture and ADR conventions
+MFK-004 — Project Hierarchy ADR-001 through ADR-006 accepted
 ```
 
-Current fork `main` after MFK-002:
+Fork base for MFK-004:
 
 ```text
-6a4754ebd8c889f1240d0a7598c246cab27553c2
+286531f7c6f0e9cc5c1884b159dd303a3091778d
 ```
 
 Current investigated upstream `main`:
@@ -1014,7 +1031,7 @@ Current investigated upstream `main`:
 
 No fork-specific product behavior has been implemented yet.
 
-The immediate next architectural work after MFK-003 is to write and review the hierarchy ADR set, followed by failover ADRs and the upstream regression baseline.
+The immediate next architectural work after MFK-004 is MFK-005: write and review the failover ADR set, followed by the upstream regression baseline.
 
 ---
 
