@@ -26,7 +26,7 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 
 ## Current Phase
 
-The project is still in foundation/architecture work. No fork-specific product behavior has been implemented yet.
+Foundation architecture and the upstream regression baseline are established. No fork-specific product behavior has been implemented yet.
 
 Current sequence:
 
@@ -34,11 +34,11 @@ Current sequence:
 MFK-003 — architecture documentation                 DONE
 MFK-004 — hierarchy ADRs                             DONE
 MFK-005 — failover ADRs                              DONE
-MFK-006 — upstream regression baseline               ACTIVE
-MFK-007 — activate Project Hierarchy implementation  BLOCKED BY MFK-006
+MFK-006 — upstream regression baseline               DONE
+MFK-007 — activate Project Hierarchy implementation  NEXT
 ```
 
-The regression baseline is the merge gate between architecture-only foundation work and the first product implementation phase.
+`REGRESSION_BASELINE.md` is the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
 
 ## Upstream Compatibility Principle
 
