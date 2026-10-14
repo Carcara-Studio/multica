@@ -59,11 +59,13 @@ When superseding an ADR, the new ADR must link to the old one and the old ADR mu
 | [ADR-011](ADR-011-failover-concurrency-and-probe-leases.md) | Failover concurrency and probe leases | Accepted |
 | [ADR-012](ADR-012-no-blind-retry-after-ambiguous-partial-execution.md) | No blind retry after ambiguous partial execution | Accepted |
 | [ADR-013](ADR-013-cross-provider-compatibility-policy.md) | Cross-provider compatibility policy | Accepted |
-| ADR-014 | Upstream compatibility strategy | Reserved |
+| [ADR-014](ADR-014-upstream-compatibility-strategy.md) | Upstream compatibility strategy | Proposed |
 
-ADR-001 through ADR-006 were accepted by the human maintainer on 2026-10-14 and are implementation authority for Project Hierarchy work unless superseded by a later accepted ADR.
+ADR-001 through ADR-006 were accepted by the human maintainer on 2026-10-14 and are implementation authority for Project Hierarchy work unless superseded or narrowed by a later accepted ADR.
 
-ADR-007 through ADR-013 were accepted by the human maintainer on 2026-10-14 and are implementation authority for primary/fallback failover work unless superseded by a later accepted ADR.
+ADR-007 through ADR-013 were accepted by the human maintainer on 2026-10-14 and are implementation authority for primary/fallback failover work unless superseded or narrowed by a later accepted ADR.
+
+ADR-014 is currently proposed. If accepted, it becomes implementation authority for adapting fork mechanisms to current upstream repository rules. In particular, it would take precedence over the FK-specific implementation proposals in ADR-001 and ADR-003 without changing their hierarchy-domain invariants.
 
 ## Required Structure
 
