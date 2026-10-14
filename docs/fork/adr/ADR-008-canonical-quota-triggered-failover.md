@@ -1,6 +1,6 @@
 # ADR-008 — Canonical quota-triggered failover
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -108,7 +108,7 @@ Current TaskService retry behavior is a separate policy. At the investigated bas
 
 - A provider whose quota error is not recognized by upstream classification will not fail over until the canonical classifier is improved.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
