@@ -1,6 +1,6 @@
 # ADR-005 — Escalation semantics
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #5
@@ -71,7 +71,7 @@ The existing Project model already has an optional `lead_type` / `lead_id`, but 
 - May require multiple turns before reaching the root.
 - A broken manager can block organizational flow until repaired.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
