@@ -1,6 +1,6 @@
 # ADR-012 — No blind retry after ambiguous partial execution
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -93,7 +93,7 @@ Current Multica already treats retryability and session continuity as explicit s
 - The run that discovered quota does not automatically continue on fallback.
 - User or subsequent workflow may need to re-trigger work after inspecting current state.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
