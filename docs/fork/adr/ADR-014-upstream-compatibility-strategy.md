@@ -1,6 +1,6 @@
 # ADR-014 — Upstream compatibility strategy
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #13, #14
@@ -97,7 +97,7 @@ Use:
 - Every create/update/delete path must participate in the same transaction/lock protocol.
 - Tests must prove relationship and cleanup invariants that an FK would otherwise provide automatically.
 
-**Decision:** accepted if this ADR is approved.
+**Decision:** accepted.
 
 ## Decision
 
