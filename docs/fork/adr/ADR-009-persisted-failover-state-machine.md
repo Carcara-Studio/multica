@@ -1,6 +1,6 @@
 # ADR-009 — Persisted failover state machine
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
 - Related issues: #7
@@ -90,7 +90,7 @@ Configuration and operational state have different lifecycles. Fallback configur
 
 - Adds a state table and transition service.
 
-**Decision:** accepted design, pending ADR approval.
+**Decision:** accepted.
 
 ## Decision
 
