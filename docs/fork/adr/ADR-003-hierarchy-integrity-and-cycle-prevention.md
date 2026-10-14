@@ -3,9 +3,11 @@
 - Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
-- Related issues: #5
+- Related issues: #5, #13, #14
 - Supersedes: None
 - Superseded by: None
+
+> **Implementation note (2026-10-14):** ADR-014 is authoritative where this ADR's earlier implementation proposals mentioned new foreign keys or cascades. The integrity model remains unchanged: Project-row serialization, row-local constraints/indexes and authoritative transactional service validation together enforce the hierarchy invariants under current upstream policy.
 
 ## Context
 
@@ -30,9 +32,10 @@ Current Multica already uses PostgreSQL transactional locking patterns, includin
 - Integrity must survive multiple server instances.
 - Invalid hierarchy states should be prevented at write time, not repaired later.
 - Structural writes are rare relative to hierarchy reads, so correctness is more important than maximizing concurrent hierarchy mutations in one Project.
-- Database constraints should enforce simple invariants where practical.
-- More contextual invariants may be enforced by one authoritative hierarchy service inside a transaction.
+- Database-local constraints/indexes should enforce simple row/uniqueness invariants where practical.
+- Cross-row/cross-table invariants must be enforced by one authoritative hierarchy service inside a transaction.
 - Avoid triggers or broad modifications to upstream central tables unless evidence shows they are necessary.
+- Follow ADR-014 and current upstream migration/database conventions.
 
 ## Considered Alternatives
 
@@ -84,7 +87,7 @@ Without a shared serialization point both validations may pass before either com
 
 **Decision:** rejected for v1.
 
-### Alternative D — DB constraints for local invariants plus Project-level transactional serialization for structural writes
+### Alternative D — DB-local constraints/indexes plus Project-level transactional serialization for structural writes
 
 **Pros**
 
@@ -93,11 +96,13 @@ Without a shared serialization point both validations may pass before either com
 - Simple concurrency model.
 - Complex checks remain explicit in service code.
 - Limited fork footprint.
+- Conforms to current upstream no-new-FK relationship ownership policy.
 
 **Cons**
 
 - Only one structural mutation per Project proceeds at a time.
 - Requires disciplined lock ordering for every hierarchy mutation.
+- Application code must prove relationship existence/scope/cleanup invariants that an FK would otherwise help enforce.
 
 **Decision:** accepted.
 
@@ -134,34 +139,39 @@ For each Project:
 9. Agent and Project must belong to the same Workspace.
 10. Only eligible user Agents may be active hierarchy members.
 
-### Proposed database constraints
+### Database-local enforcement under ADR-014
 
-Names are proposals and must be adapted to current migration conventions.
+Names remain implementation proposals and must follow the then-current migration conventions.
+
+The database should enforce invariants that are row-local or uniqueness-based without adding new relationship FKs/cascades:
 
 ```text
-UNIQUE(project_id, agent_id)
-UNIQUE(project_id, id)
 CHECK (manager_membership_id IS NULL OR manager_membership_id <> id)
+UNIQUE INDEX (project_id, agent_id)
+UNIQUE INDEX (project_id)
+  WHERE manager_membership_id IS NULL
+    AND archived_at IS NULL
 ```
 
-Use a same-Project composite self-reference conceptually equivalent to:
+Additional lookup indexes should support:
 
-```text
-FOREIGN KEY (project_id, manager_membership_id)
-REFERENCES project_agent_membership(project_id, id)
-```
+- membership by Project;
+- membership by Agent/Project;
+- active direct reports by `(project_id, manager_membership_id)`;
+- Workspace cleanup by `workspace_id`.
 
-Use a partial unique index for the active root conceptually equivalent to:
+Under current upstream policy every migration-created index is built with `CREATE [UNIQUE] INDEX CONCURRENTLY` in its own single-statement migration, with the migration runner's invalid-index cleanup convention applied.
 
-```text
-UNIQUE(project_id)
-WHERE manager_membership_id IS NULL
-  AND archived_at IS NULL
-```
+The following contextual relationships are **not** delegated to new FKs:
 
-This DB index provides **at most one** active root. The service transaction enforces the stronger rule that a non-empty active hierarchy has **exactly one** root before commit.
+- Project exists and is in the expected Workspace;
+- Agent exists, is eligible and belongs to the same Workspace;
+- manager membership exists, is active and belongs to the same Project;
+- hierarchy rows are removed explicitly during Project/Workspace teardown.
 
-Project/Agent Workspace equality is validated transactionally through the authoritative service in v1. We intentionally avoid adding new composite unique keys to upstream `project` or `agent` solely to support a composite Workspace FK unless implementation-time inspection shows a clean additive way to do so.
+Those rules are owned by the authoritative hierarchy service/query transaction and lifecycle cleanup paths.
+
+The partial unique root index provides **at most one** active root. The service transaction enforces the stronger rule that a non-empty active hierarchy has **exactly one** root before commit.
 
 ### Cycle check
 
@@ -181,36 +191,41 @@ A manager/root with active descendants cannot be removed, archived as a membersh
 
 Changing the root is an explicit transactional operation that leaves exactly one root at commit.
 
+Project deletion removes Project hierarchy rows explicitly in the existing locked Project deletion transaction. Workspace deletion removes hierarchy rows through the existing Workspace teardown graph. No cascade may silently restructure the hierarchy.
+
 ## Consequences
 
 ### Positive
 
 - Deterministic integrity under concurrency.
 - No distributed lock subsystem needed.
-- Most simple invalid states are blocked by DB constraints.
+- Simple local invalid states are blocked by DB checks/unique indexes.
 - More complex rules stay readable/testable in service code.
 - Structural changes remain isolated from task runtime paths.
+- Schema follows current upstream relationship/migration policy.
 
 ### Negative / Trade-offs
 
 - Structural writes within one Project are serialized.
 - The Project row becomes the hierarchy mutation lock point.
-- Workspace equality relies on service enforcement in v1 rather than a single DB FK.
+- Cross-table relationship integrity relies on authoritative service/query transactions rather than new FKs.
+- Project/Workspace cleanup tests become mandatory.
 - Bulk reorganization APIs must be transactional rather than a sequence of independent edits.
 
 ## Data Impact
 
-Expected indexes:
+Expected data/index behavior under ADR-014:
 
-- Project membership lookup;
-- Agent membership lookup;
-- direct reports by `manager_membership_id`;
-- partial unique active root;
-- composite uniqueness required by same-Project manager FK.
+- one additive `project_agent_membership` table;
+- no new Project/Agent/self foreign keys or cascades;
+- row-local self-reference `CHECK`;
+- concurrent unique Project/Agent membership index;
+- concurrent partial unique active-root index;
+- concurrent direct-report lookup index;
+- concurrent Workspace cleanup index;
+- explicit Project/Workspace cleanup queries integrated into existing deletion transactions.
 
-FK delete behavior should avoid silent structural mutation. In particular, manager membership references should not use `ON DELETE SET NULL`, because that could accidentally create a second root or orphaned node.
-
-Physical deletion of hierarchy rows should be rare; archival/explicit cleanup is preferred while references exist.
+Physical deletion of individual hierarchy rows should remain rare once structural behavior exists; archival/explicit cleanup is preferred while references exist. Project/Workspace teardown is explicit owner cleanup rather than cascade behavior.
 
 ## Backend / Runtime Impact
 
@@ -236,12 +251,13 @@ Bulk root replacement/reparent should be an explicit operation rather than a UI 
 
 - `A -> B` and concurrent `B -> A`: one transaction waits; after the first commits, the second revalidates and fails.
 - Transitive cycle `A -> B -> C`, then `A.manager = C`: rejected.
-- Manager from another Project: rejected by composite manager relation/service validation.
+- Manager from another Project: rejected by authoritative service validation before commit.
 - Agent from another Workspace: rejected before membership mutation.
+- Missing/archived manager: rejected before membership mutation.
 - Remove only root from a non-empty hierarchy: rejected unless the same transaction empties the hierarchy intentionally through an explicit operation.
 - Reparent manager while descendants exist: allowed only if resulting graph remains connected and acyclic.
-- Archived membership selected as manager: rejected.
-- Concurrent root creation: partial unique root index plus Project lock prevents two active roots.
+- Concurrent root creation: Project lock plus partial unique root index prevents two active roots.
+- Project/Workspace delete racing hierarchy writes: lifecycle lock protocol and explicit cleanup must prevent orphan rows.
 
 ## Testing Requirements
 
@@ -260,18 +276,26 @@ Bulk root replacement/reparent should be an explicit operation rather than a UI 
 
 ### Database/concurrency
 
+- self-reference check;
+- unique `(project_id, agent_id)`;
+- active-root partial uniqueness;
+- expected concurrent index shapes;
 - concurrent `A -> B` / `B -> A`, exactly one succeeds;
 - concurrent root creation, at most one succeeds;
-- same-Project composite manager FK;
-- root partial uniqueness;
 - rollback leaves prior tree unchanged;
-- failed bulk reorganization is atomic.
+- failed bulk reorganization is atomic;
+- Project deletion removes hierarchy rows atomically;
+- Workspace deletion removes hierarchy rows;
+- cleanup cannot cross Workspace boundaries;
+- deletion/write races do not leave orphan hierarchy rows.
 
 ## Upstream Compatibility
 
 The lock uses the existing Project row rather than adding a new global synchronization subsystem.
 
-The design adds constraints/indexes only to the new fork table where possible. It avoids triggers and avoids modifying central upstream Agent/Project schema merely to support hierarchy.
+The design adds only fork-owned table/check/index/query surfaces where possible, follows current upstream application-owned relationship policy, uses concurrent-index migration conventions, avoids triggers and avoids modifying central upstream Agent/Project schema merely to support hierarchy.
+
+ADR-014 governs implementation mechanics when this ADR and current upstream repository rules differ.
 
 If upstream later introduces a Project membership transaction/locking convention, the hierarchy service should converge toward it.
 
