@@ -3,9 +3,11 @@
 - Status: Accepted
 - Date: 2026-10-14
 - Decision owners: Human maintainer
-- Related issues: #5
+- Related issues: #5, #13, #14
 - Supersedes: None
 - Superseded by: None
+
+> **Implementation note (2026-10-14):** ADR-014 is authoritative where this ADR's earlier implementation proposals mention new foreign keys or cascades. The Project-scoped hierarchy domain decision remains unchanged, but relationships are application-owned under current upstream policy and must be validated/cleaned up transactionally.
 
 ## Context
 
@@ -144,7 +146,7 @@ Core semantics:
 
 1. A membership represents an Agent's organizational participation in one Project.
 2. An Agent may have at most one active membership in a given Project.
-3. `manager_membership_id` references another membership in the same Project.
+3. `manager_membership_id` identifies another membership in the same Project; under ADR-014 this relationship is application-owned rather than enforced with a new FK.
 4. A configured active hierarchy has exactly one active root (`manager_membership_id IS NULL`).
 5. Every other active membership has exactly one active direct manager.
 6. Hierarchy depth is derived from the adjacency list and is not stored as authoritative state.
@@ -176,19 +178,19 @@ The operational root is an Agent membership. Human Project leadership remains a 
 
 ## Data Impact
 
-Expected additive data change:
+Expected additive data change under ADR-014:
 
-- new `project_agent_membership` table;
-- FK to `project`;
-- FK to `agent`;
-- same-Project self-reference for manager membership;
-- uniqueness and root indexes described in ADR-003.
+- new `project_agent_membership` table with Project/Agent/manager identifiers stored as application-owned relationships;
+- no new foreign keys or cascades for those relationships while current upstream policy forbids them;
+- row-local `CHECK` constraints where useful;
+- concurrent unique/partial indexes for Project/Agent uniqueness, active-root uniqueness and lookup/cleanup access paths as described by ADR-003/ADR-014;
+- explicit Project/Workspace lifecycle cleanup in existing upstream deletion transactions.
 
 No existing Project, Agent, Squad or Issue row requires backfill.
 
-Rollback of the initial schema is possible by removing the new hierarchy tables only when no fork feature still depends on them.
+Rollback of the initial schema is possible by removing only fork-owned hierarchy schema/indexes when no fork feature still depends on them.
 
-Exact migration number and final column names must be selected from the current upstream migration sequence at implementation time.
+Exact migration numbers and final column/index names must be selected from the current upstream migration sequence and migration rules at implementation time.
 
 ## Backend / Runtime Impact
 
@@ -221,7 +223,7 @@ Existing clients that know nothing about hierarchy must continue to function.
 - Project lead is an Agent: this still does not automatically make that Agent the root.
 - Agent is absent from the Project hierarchy: normal upstream execution may continue, but hierarchy-only actions are unavailable.
 - Hidden/system Agent: cannot be inserted as an organizational membership.
-- Cross-Project manager reference: invalid; ADR-003 defines enforcement.
+- Cross-Project manager reference: invalid; ADR-003/ADR-014 define transactional enforcement.
 - Archive/removal behavior: ADR-006.
 
 ## Testing Requirements
@@ -232,6 +234,7 @@ Existing clients that know nothing about hierarchy must continue to function.
 - Issue without Project preserves upstream behavior;
 - Project lead remains independent from hierarchy root;
 - system Agents cannot become hierarchy members;
+- Project/Workspace cleanup does not leave orphan hierarchy rows;
 - direct Agent and Squad-assigned Issue regressions remain unchanged.
 
 ## Upstream Compatibility
@@ -242,6 +245,7 @@ Primary strategy:
 
 - additive table;
 - isolated service/module;
+- application-owned relationships following ADR-014;
 - optional behavior;
 - no existing payload field becomes required;
 - no existing assignee type changes.
