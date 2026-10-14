@@ -31,11 +31,11 @@ The project is still in foundation/architecture work. No fork-specific product b
 Current sequence:
 
 ```text
-MFK-003 — architecture documentation
-MFK-004 — hierarchy ADRs
-MFK-005 — failover ADRs
-MFK-006 — upstream regression baseline
-MFK-007 — activate Project Hierarchy implementation
+MFK-003 — architecture documentation                 DONE
+MFK-004 — hierarchy ADRs                             DONE
+MFK-005 — failover ADRs                              DONE
+MFK-006 — upstream regression baseline               ACTIVE
+MFK-007 — activate Project Hierarchy implementation  BLOCKED BY MFK-006
 ```
 
 The regression baseline is the merge gate between architecture-only foundation work and the first product implementation phase.
