@@ -56,6 +56,7 @@ func TestProjectHierarchyMigrationsUpDownUpInIsolatedSchema(t *testing.T) {
 			continue
 		}
 
+		assertProjectHierarchyTableShape(t, ctx, pool, schema)
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_id_idx", true, []string{"(id)"})
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_project_agent_idx", true, []string{"(project_id, agent_id)"})
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_active_root_idx", true, []string{"(project_id)", "manager_membership_id IS NULL", "archived_at IS NULL"})
@@ -63,6 +64,92 @@ func TestProjectHierarchyMigrationsUpDownUpInIsolatedSchema(t *testing.T) {
 		assertProjectHierarchyIndex(t, ctx, pool, schema, "project_agent_membership_workspace_idx", false, []string{"(workspace_id)"})
 
 		assertHierarchyConstraintErrors(t, ctx, pool)
+	}
+}
+
+func assertProjectHierarchyTableShape(t *testing.T, ctx context.Context, pool queryRower, schema string) {
+	t.Helper()
+
+	type columnExpectation struct {
+		name            string
+		dataType        string
+		nullable        bool
+		defaultContains string
+	}
+	for _, want := range []columnExpectation{
+		{name: "id", dataType: "uuid", nullable: false, defaultContains: "gen_random_uuid"},
+		{name: "workspace_id", dataType: "uuid", nullable: false},
+		{name: "project_id", dataType: "uuid", nullable: false},
+		{name: "agent_id", dataType: "uuid", nullable: false},
+		{name: "manager_membership_id", dataType: "uuid", nullable: true},
+		{name: "title", dataType: "text", nullable: false, defaultContains: "''::text"},
+		{name: "archived_at", dataType: "timestamp with time zone", nullable: true},
+		{name: "created_at", dataType: "timestamp with time zone", nullable: false, defaultContains: "now()"},
+		{name: "updated_at", dataType: "timestamp with time zone", nullable: false, defaultContains: "now()"},
+	} {
+		var dataType, defaultValue string
+		var nullable bool
+		if err := pool.QueryRow(ctx, `
+SELECT data_type, is_nullable = 'YES', COALESCE(column_default, '')
+FROM information_schema.columns
+WHERE table_schema = $1 AND table_name = 'project_agent_membership' AND column_name = $2
+`, schema, want.name).Scan(&dataType, &nullable, &defaultValue); err != nil {
+			t.Fatalf("inspect column %s: %v", want.name, err)
+		}
+		if dataType != want.dataType || nullable != want.nullable {
+			t.Fatalf("column %s type/nullable = %s/%v, want %s/%v", want.name, dataType, nullable, want.dataType, want.nullable)
+		}
+		if want.defaultContains != "" && !strings.Contains(defaultValue, want.defaultContains) {
+			t.Fatalf("column %s default %q missing %q", want.name, defaultValue, want.defaultContains)
+		}
+	}
+
+	var checkDefinition string
+	if err := pool.QueryRow(ctx, `
+SELECT pg_get_constraintdef(c.oid)
+FROM pg_constraint c
+JOIN pg_class r ON r.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = r.relnamespace
+WHERE n.nspname = $1
+  AND r.relname = 'project_agent_membership'
+  AND c.conname = 'project_agent_membership_manager_not_self'
+`, schema).Scan(&checkDefinition); err != nil {
+		t.Fatalf("inspect self-manager CHECK: %v", err)
+	}
+	if !strings.Contains(checkDefinition, "manager_membership_id <> id") {
+		t.Fatalf("self-manager CHECK definition = %q", checkDefinition)
+	}
+
+	var foreignKeys, userTriggers, rows int
+	if err := pool.QueryRow(ctx, `
+SELECT count(*)
+FROM pg_constraint c
+JOIN pg_class r ON r.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = r.relnamespace
+WHERE n.nspname = $1 AND r.relname = 'project_agent_membership' AND c.contype = 'f'
+`, schema).Scan(&foreignKeys); err != nil {
+		t.Fatalf("inspect hierarchy foreign keys: %v", err)
+	}
+	if foreignKeys != 0 {
+		t.Fatalf("project_agent_membership has %d foreign keys, want 0 under ADR-014", foreignKeys)
+	}
+	if err := pool.QueryRow(ctx, `
+SELECT count(*)
+FROM pg_trigger t
+JOIN pg_class r ON r.oid = t.tgrelid
+JOIN pg_namespace n ON n.oid = r.relnamespace
+WHERE n.nspname = $1 AND r.relname = 'project_agent_membership' AND NOT t.tgisinternal
+`, schema).Scan(&userTriggers); err != nil {
+		t.Fatalf("inspect hierarchy triggers: %v", err)
+	}
+	if userTriggers != 0 {
+		t.Fatalf("project_agent_membership has %d user triggers, want 0", userTriggers)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM project_agent_membership`).Scan(&rows); err != nil {
+		t.Fatalf("count hierarchy rows after migration: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("hierarchy migration backfilled %d rows, want 0", rows)
 	}
 }
 
@@ -92,7 +179,7 @@ WHERE n.nspname = $1 AND c.relname = $2
 	}
 }
 
-// queryRower is the exact small pgx surface needed by the index assertion.
+// queryRower is the exact small pgx surface needed by the schema assertions.
 // pgxpool.Pool and pgx.Tx both return pgx.Row from QueryRow.
 type queryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
