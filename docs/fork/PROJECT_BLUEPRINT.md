@@ -6,7 +6,7 @@
 > **Reference project:** `paperclipai/paperclip`  
 > **Investigated upstream baseline:** `52b26900c51f759b87707b4ea35fa9f141b83b52`  
 > **Snapshot date:** 2026-10-14  
-> **Current phase:** Foundation → Regression baseline → Incremental implementation
+> **Current phase:** Foundation complete → Project Hierarchy implementation
 
 ---
 
@@ -833,6 +833,8 @@ Pin unchanged upstream behavior for:
 - Agent archive behavior;
 - normal runtime/model selection.
 
+The executable and mapped upstream baseline is documented in `docs/fork/REGRESSION_BASELINE.md`. MFK-006 confirmed an exact upstream backend CI pass and identifies focused fork-sensitive gaps that become mandatory before the corresponding hierarchy/failover hotspot is modified. In particular, direct Agent routing and Issue-without-Project neutrality must be pinned before hierarchy runtime integration.
+
 ---
 
 ## 21. ADR Status
@@ -882,8 +884,8 @@ MFK-002 — Establish repository governance and sync policy              DONE
 MFK-003 — Add fork architecture and decision documentation             DONE
 MFK-004 — Record hierarchy ADRs                                        DONE
 MFK-005 — Record failover ADRs                                         DONE
-MFK-006 — Establish upstream regression baseline                       NEXT
-MFK-007 — Activate Project Hierarchy implementation
+MFK-006 — Establish upstream regression baseline                       DONE
+MFK-007 — Activate Project Hierarchy implementation                    NEXT
 ```
 
 ### Hierarchy
@@ -979,6 +981,13 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 - known incompatibility or unknown required capability fails closed;
 - cross-runtime/provider fallback never reuses a primary provider session.
 
+### Accepted regression baseline
+
+- exact upstream backend CI at `52b26900c51f759b87707b4ea35fa9f141b83b52` passed with Go race tests, PostgreSQL/pgvector and Redis;
+- existing upstream tests strongly protect Squad routing/briefing, child wakeups, canonical failure classification, retry races, runtime ownership/session continuity and Project/Issue scope;
+- fork-sensitive coverage gaps are explicitly documented in `docs/fork/REGRESSION_BASELINE.md` and must be closed before modifying their corresponding hotspots;
+- skipped path-filtered CI jobs are not treated as executed passes.
+
 ### Must be revalidated before implementation
 
 - exact common enqueue hook for target resolution;
@@ -1025,7 +1034,7 @@ After the process stabilizes, development may move to a controlled Multica Squad
 
 ## 25. Current Foundation Status
 
-Completed in repository history or by this MFK-005 change set:
+Completed in repository history or by this MFK-006 change set:
 
 ```text
 MFK-001 — fork baseline and origin/upstream setup
@@ -1033,12 +1042,13 @@ MFK-002 — main protection, governance, upstream sync policy
 MFK-003 — repository-resident architecture and ADR conventions
 MFK-004 — Project Hierarchy ADR-001 through ADR-006 accepted
 MFK-005 — Primary/Fallback ADR-007 through ADR-013 accepted
+MFK-006 — Upstream regression baseline and pre-implementation gates established
 ```
 
-Fork base for MFK-005:
+Fork base for MFK-006:
 
 ```text
-feadd478fb90abddd0aea64e66ae6616add7ac27
+0b233f5e72234c5c5cb8f063a983657578ebf0ed
 ```
 
 Current investigated upstream `main`:
@@ -1049,7 +1059,7 @@ Current investigated upstream `main`:
 
 No fork-specific product behavior has been implemented yet.
 
-The immediate next foundation work after MFK-005 is MFK-006: establish the upstream regression baseline before any hierarchy implementation begins.
+The immediate next work after MFK-006 is MFK-007: activate Project Hierarchy implementation, beginning with the data-model phase and the regression gates defined in `docs/fork/REGRESSION_BASELINE.md`.
 
 ---
 

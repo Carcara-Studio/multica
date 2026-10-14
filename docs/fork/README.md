@@ -9,6 +9,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`PROJECT_BLUEPRINT.md`](./PROJECT_BLUEPRINT.md) — project mission, confirmed upstream architecture, fork architecture, roadmap, risks, and current decisions.
 - [`GOVERNANCE.md`](./GOVERNANCE.md) — repository governance, protected-branch workflow, and implementation-agent rules.
 - [`UPSTREAM_SYNC.md`](./UPSTREAM_SYNC.md) — policy for continuously incorporating upstream changes while preserving Git ancestry.
+- [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
 ## Authority
@@ -25,17 +26,19 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 
 ## Current Phase
 
-The project is still in foundation/architecture work. No fork-specific product behavior has been implemented yet.
+Foundation architecture and the upstream regression baseline are established. No fork-specific product behavior has been implemented yet.
 
 Current sequence:
 
 ```text
-MFK-003 — architecture documentation
-MFK-004 — hierarchy ADRs
-MFK-005 — failover ADRs
-MFK-006 — upstream regression baseline
-MFK-007 — activate Project Hierarchy implementation
+MFK-003 — architecture documentation                 DONE
+MFK-004 — hierarchy ADRs                             DONE
+MFK-005 — failover ADRs                              DONE
+MFK-006 — upstream regression baseline               DONE
+MFK-007 — activate Project Hierarchy implementation  NEXT
 ```
+
+`REGRESSION_BASELINE.md` is the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
 
 ## Upstream Compatibility Principle
 
