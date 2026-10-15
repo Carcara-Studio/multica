@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -16,11 +15,9 @@ import (
 func hierarchyAPIProject(t *testing.T) string {
 	t.Helper()
 	projectID := dbfx.Project(t, "Hierarchy API "+uuid.NewString())
-	// project_agent_membership deliberately has no FK/cascade. Delete rows
-	// before the Fixture removes the Project so this test leaves no history.
-	t.Cleanup(func() {
-		_, _ = testPool.Exec(context.Background(), `DELETE FROM project_agent_membership WHERE project_id = $1::uuid`, projectID)
-	})
+	// project_agent_membership deliberately has no FK/cascade. Register this
+	// cleanup on the Fixture stack so it runs before Fixture deletes Project.
+	dbfx.Cleanup(t, "DELETE FROM project_agent_membership WHERE project_id = $1::uuid", projectID)
 	return projectID
 }
 
