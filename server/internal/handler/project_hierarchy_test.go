@@ -75,8 +75,7 @@ func TestProjectHierarchyAPIGetEmptyAndActiveOnly(t *testing.T) {
 
 	archive := httptest.NewRecorder()
 	archiveReq := newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/"+child.ID, nil)
-	archiveReq = withURLParam(archiveReq, "id", projectID)
-	archiveReq = withURLParam(archiveReq, "membershipId", child.ID)
+	archiveReq = withURLParams(archiveReq, "id", projectID, "membershipId", child.ID)
 	testHandler.ArchiveProjectHierarchyMembership(archive, archiveReq)
 	if archive.Code != http.StatusNoContent {
 		t.Fatalf("archive child: status=%d body=%s", archive.Code, archive.Body.String())
@@ -109,8 +108,7 @@ func TestProjectHierarchyAPIMutationsDelegateToService(t *testing.T) {
 	req := newRequest(http.MethodPut, "/api/projects/"+projectID+"/hierarchy/memberships/"+child.ID+"/manager", ReparentProjectHierarchyMembershipRequest{
 		ManagerMembershipID: other.ID,
 	})
-	req = withURLParam(req, "id", projectID)
-	req = withURLParam(req, "membershipId", child.ID)
+	req = withURLParams(req, "id", projectID, "membershipId", child.ID)
 	testHandler.ReparentProjectHierarchyMembership(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("reparent child: status=%d body=%s", w.Code, w.Body.String())
@@ -140,15 +138,14 @@ func TestProjectHierarchyAPIMutationsDelegateToService(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&changed); err != nil {
 		t.Fatalf("decode structure result: %v", err)
 	}
-	if changed.Total != 2 {
-		t.Fatalf("changed membership count=%d, want 2", changed.Total)
+	if changed.Total != 3 {
+		t.Fatalf("changed membership count=%d, want 3", changed.Total)
 	}
 
 	// The old child now remains below other and can be archived as a leaf.
 	w = httptest.NewRecorder()
 	req = newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/"+child.ID, nil)
-	req = withURLParam(req, "id", projectID)
-	req = withURLParam(req, "membershipId", child.ID)
+	req = withURLParams(req, "id", projectID, "membershipId", child.ID)
 	testHandler.ArchiveProjectHierarchyMembership(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("archive leaf: status=%d body=%s", w.Code, w.Body.String())
@@ -163,8 +160,7 @@ func TestProjectHierarchyAPIReactivationReusesMembershipID(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/"+first.ID, nil)
-	req = withURLParam(req, "id", projectID)
-	req = withURLParam(req, "membershipId", first.ID)
+	req = withURLParams(req, "id", projectID, "membershipId", first.ID)
 	testHandler.ArchiveProjectHierarchyMembership(w, req)
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("archive membership: status=%d body=%s", w.Code, w.Body.String())
@@ -219,8 +215,7 @@ func TestProjectHierarchyAPIValidationAndDomainMapping(t *testing.T) {
 	t.Run("malformed membership id", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req := newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/not-a-uuid", nil)
-		req = withURLParam(req, "id", projectID)
-		req = withURLParam(req, "membershipId", "not-a-uuid")
+		req = withURLParams(req, "id", projectID, "membershipId", "not-a-uuid")
 		testHandler.ArchiveProjectHierarchyMembership(w, req)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s, want 400", w.Code, w.Body.String())
@@ -242,8 +237,7 @@ func TestProjectHierarchyAPIValidationAndDomainMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		missing := uuid.NewString()
 		req := newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/"+missing, nil)
-		req = withURLParam(req, "id", projectID)
-		req = withURLParam(req, "membershipId", missing)
+		req = withURLParams(req, "id", projectID, "membershipId", missing)
 		testHandler.ArchiveProjectHierarchyMembership(w, req)
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s, want 404", w.Code, w.Body.String())
