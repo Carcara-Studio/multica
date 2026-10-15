@@ -92,10 +92,10 @@ SELECT id FROM workspace WHERE id = $1 FOR KEY SHARE;
 
 -- name: DeleteWorkspace :exec
 -- The channel_* tables (MUL-3515 §4), resource-label junctions, custom issue
--- property definitions, and quick actions carry NO FK to workspace, so — unlike the CASCADE-backed
--- tables the DELETE below sweeps — they are not cleaned up implicitly. Remove
--- their workspace-owned rows here so they commit or roll back atomically with
--- the workspace row.
+-- property definitions, quick actions, and fork hierarchy memberships carry NO
+-- FK to workspace, so — unlike the CASCADE-backed tables the DELETE below sweeps
+-- — they are not cleaned up implicitly. Remove their workspace-owned rows here
+-- so they commit or roll back atomically with the workspace row.
 WITH ws_installations AS (
     SELECT id FROM channel_installation WHERE workspace_id = $1
 ),
@@ -238,5 +238,11 @@ cleared_vcs_connections AS (
 ),
 cleared_client_usage_workspace AS (
     UPDATE client_usage_daily SET workspace_id = NULL WHERE workspace_id = $1
+),
+cleared_project_agent_memberships AS (
+    -- Fork hierarchy relationships are application-owned under ADR-014. The
+    -- surrounding DeleteWorkspace transaction already holds the workspace row
+    -- lock, so remove these rows explicitly before the owner row disappears.
+    DELETE FROM project_agent_membership WHERE workspace_id = $1
 )
 DELETE FROM workspace WHERE workspace.id = $1;

@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS project_agent_membership_manager_idx ON project_agent_membership (project_id, manager_membership_id) WHERE archived_at IS NULL AND manager_membership_id IS NOT NULL;
