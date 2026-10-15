@@ -26,7 +26,7 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 
 ## Current Phase
 
-Foundation architecture and the upstream regression baseline are established. Project Hierarchy implementation activation is in final review, but no fork-specific product behavior has been implemented yet.
+Foundation architecture and the upstream regression baseline are established. Project Hierarchy persistence and the authoritative transactional mutation domain are now implemented.
 
 Current sequence:
 
@@ -35,15 +35,29 @@ MFK-003 — architecture documentation                 DONE
 MFK-004 — hierarchy ADRs                             DONE
 MFK-005 — failover ADRs                              DONE
 MFK-006 — upstream regression baseline               DONE
-MFK-007 — activate Project Hierarchy implementation  READY FOR MERGE
-HIER-001 — Project hierarchy schema                  BLOCKED UNTIL MFK-007 MERGES
+MFK-007 — activate Project Hierarchy implementation  DONE
+HIER-001 — Project hierarchy schema                  DONE
+HIER-002 — ProjectHierarchyService                   DONE
+HIER-003 — cycle-safe concurrent mutations           DONE / SUBSUMED BY HIER-002
+MFK-008 — reconcile roadmap/governance                IN PROGRESS
+HIER-004 — Project hierarchy API                     NEXT PRODUCT WORK
 ```
+
+HIER-003 is not a separate implementation branch. HIER-002 already delivered Project-row serialization, complete final-tree validation, cycle prevention, concurrent cycle/root mutation coverage, and rollback/lock-release validation. Reimplementing that scope would duplicate fork logic without adding capability.
 
 `REGRESSION_BASELINE.md` remains the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
 
-Implementation-time revalidation found current upstream database rules that prohibit new foreign keys/cascades and require every new index to use its own concurrent-index migration. [`ADR-014`](./adr/ADR-014-upstream-compatibility-strategy.md) is now accepted and makes those current upstream engineering contracts authoritative for fork implementation while preserving the semantic invariants of earlier hierarchy ADRs.
+Implementation-time revalidation found upstream database rules that prohibit new foreign keys/cascades and require every new index to use its own concurrent-index migration. [`ADR-014`](./adr/ADR-014-upstream-compatibility-strategy.md) remains authoritative for fork implementation while preserving the semantic invariants of earlier hierarchy ADRs.
 
-HIER-001 may begin only after MFK-007 is merged. Its implementation must recheck upstream HEAD and migration head before writing or integrating product schema.
+The next product implementation milestone is HIER-004. Before adding a public hierarchy API, inspect the current upstream handler/router/types/error conventions and design the adapter around `server/internal/projecthierarchy` rather than duplicating mutation logic in handlers.
+
+## Repository Operating Model
+
+Repository-capable work proceeds autonomously through the governed GitHub workflow when it remains within accepted architecture and the defined Issue scope. The human maintainer is not a per-PR execution dependency.
+
+Human/local handoff is reserved for tests or executions that cannot be performed through available repository tooling, and for external product input that cannot be inferred from accepted requirements or repository evidence.
+
+See [`GOVERNANCE.md`](./GOVERNANCE.md) for the full merge and implementation-agent policy.
 
 ## Upstream Compatibility Principle
 

@@ -1,12 +1,12 @@
 # Multica Fork — Project Blueprint
 
-> **Status:** Foundation complete / Project Hierarchy implementation activation  
+> **Status:** Foundation complete / Project Hierarchy core write domain implemented  
 > **Fork:** `Carcara-Studio/multica`  
 > **Upstream:** `multica-ai/multica`  
 > **Reference project:** `paperclipai/paperclip`  
-> **Investigated upstream baseline:** `52b26900c51f759b87707b4ea35fa9f141b83b52`  
-> **Snapshot date:** 2026-10-14  
-> **Current phase:** MFK-007 ready for merge → HIER-001 next
+> **Latest revalidated upstream baseline:** `83527872634824012dd26bb183aa216fab631c05`  
+> **Snapshot date:** 2026-10-15  
+> **Current phase:** MFK-008 roadmap/governance reconciliation → HIER-004 next
 
 ---
 
@@ -202,7 +202,7 @@ This existing machinery should be reused for hierarchical delegation/completion 
 
 Introduce a Project-scoped Agent membership entity rather than adding `manager_id` to the global Agent.
 
-Current minimal HIER-001 shape under accepted ADR-014:
+Implemented HIER-001 shape under accepted ADR-014:
 
 ```text
 project_agent_membership
@@ -230,7 +230,7 @@ This expresses:
 
 Current upstream `AGENTS.md` forbids new foreign keys/cascades and requires migration-created indexes to use their own `CREATE [UNIQUE] INDEX CONCURRENTLY` migrations. ADR-014 makes those rules implementation authority for the fork.
 
-Database-local invariants therefore use row checks and concurrent indexes, conceptually:
+Database-local invariants use row checks and concurrent indexes, conceptually:
 
 ```text
 CHECK (manager_membership_id IS NULL OR manager_membership_id <> id)
@@ -242,7 +242,7 @@ UNIQUE INDEX (project_id)
 
 Additional concurrent indexes support active direct-report lookup and Workspace cleanup.
 
-The authoritative hierarchy service transaction must validate all contextual relationships:
+The authoritative hierarchy service transaction validates all contextual relationships:
 
 - Project exists and belongs to the expected Workspace;
 - Agent exists, is eligible and belongs to the same Workspace;
@@ -253,7 +253,7 @@ The authoritative hierarchy service transaction must validate all contextual rel
 
 Project and Workspace deletion explicitly remove hierarchy rows in their existing locked deletion transactions. No cascade silently mutates or cleans the hierarchy.
 
-The structural decisions are governed jointly by ADR-001, ADR-003 and ADR-014. Exact migration/index names remain implementation proposals and must be revalidated against the current upstream migration head immediately before implementation and merge.
+The structural decisions are governed jointly by ADR-001, ADR-003 and ADR-014. HIER-001 persistence and lifecycle cleanup are merged; future schema changes must still revalidate the current upstream migration head immediately before implementation and merge.
 
 ---
 
@@ -261,20 +261,22 @@ The structural decisions are governed jointly by ADR-001, ADR-003 and ADR-014. E
 
 Hierarchy correctness is more important than maximizing write concurrency because structural changes are infrequent.
 
-Recommended mutation flow:
+HIER-002 implements the authoritative mutation flow:
 
 ```text
 BEGIN
   ↓
-lock Project row
+lock Project row FOR UPDATE
   ↓
-load target membership + proposed manager
+load Project hierarchy membership snapshot
   ↓
-recursive descendant/cycle validation
+build tentative final active tree
   ↓
-apply mutation
+validate root / manager / Agent / cycle invariants
   ↓
-validate root invariant
+persist explicit requested changes
+  ↓
+revalidate persisted state where required
   ↓
 COMMIT
 ```
@@ -288,13 +290,18 @@ Tx B: B reports to A
 
 where both transactions might independently pass a non-serialized cycle check.
 
-Removal policy direction:
+Implemented HIER-002 membership mutation policy:
 
-- leaf removal may archive/remove the membership;
-- manager with active descendants must not be silently removed;
-- root removal requires explicit replacement/reorganization;
-- Agent archival must fail closed when it would leave active descendants under an unusable manager/root;
-- no silent reparenting.
+- create/reactivate reuses one `(project_id, agent_id)` membership row;
+- single reparent applies only to an active non-root membership;
+- active leaf non-root membership may be archived;
+- manager with active descendants cannot be silently archived;
+- root replacement/reorganization uses an explicit atomic multi-edge operation;
+- no silent reparenting;
+- full active-tree and active-Agent validation runs transactionally;
+- concurrent cycle/root-affecting structural mutations serialize on the Project row.
+
+Agent lifecycle integration remains a later concern under ADR-006 / HIER-010.
 
 These invariants are implementation authority under accepted ADR-003, ADR-006 and ADR-014.
 
@@ -710,9 +717,12 @@ Fallback quota exhaustion does not cause uncontrolled ping-pong to primary. Prim
 
 ### Hierarchy
 
+HIER-002 now provides the structural mutation concurrency foundation:
+
 - concurrent reparent operations cannot create a cycle;
 - root uniqueness remains valid under races;
-- structural writes are serialized sufficiently to make recursive validation trustworthy.
+- structural writes serialize on the owning Project row so final-tree validation sees a trustworthy snapshot;
+- rollback releases the Project lock and leaves prior state unchanged.
 
 ### Failover
 
@@ -728,21 +738,25 @@ These failover concurrency invariants are implementation authority under ADR-011
 
 ---
 
-## 17. Proposed Isolated Modules
+## 17. Isolated Modules
 
-The following paths are **proposals**, not claims that they exist upstream.
-
-### Hierarchy
+### Hierarchy implemented through HIER-002
 
 ```text
+server/internal/projecthierarchy/errors.go
 server/internal/projecthierarchy/service.go
-server/internal/projecthierarchy/validation.go
-server/internal/projecthierarchy/briefing.go
-server/internal/handler/project_hierarchy.go
+server/internal/projecthierarchy/validate.go
+server/internal/projecthierarchy/service_test.go
+server/internal/projecthierarchy/validate_test.go
 server/pkg/db/queries/project_hierarchy.sql
+server/pkg/db/generated/project_hierarchy.sql.go
 ```
 
-### Failover
+Likely future hierarchy extensions remain additive where possible, for example a narrow hierarchy handler/API adapter and later briefing/runtime modules. Exact paths must be chosen from current upstream conventions at implementation time rather than treated as reserved names.
+
+### Failover proposals
+
+The following paths are proposals, not claims that they exist upstream:
 
 ```text
 server/internal/failover/service.go
@@ -754,7 +768,7 @@ server/pkg/db/queries/agent_failover.sql
 server/internal/daemon/primary_probe.go
 ```
 
-Do not choose migration sequence numbers until implementation starts and the current upstream migration head is revalidated.
+Do not choose new migration sequence numbers until implementation starts and the current upstream migration head is revalidated.
 
 ---
 
@@ -813,6 +827,8 @@ Required coverage includes:
 - child completion wakeup to manager;
 - escalation one edge at a time;
 - explicit Project/Workspace cleanup because hierarchy relationships are application-owned.
+
+HIER-001/HIER-002 already cover persistence shape, cleanup/rollback, core tree invariants, membership lifecycle primitives and structural concurrency. Later milestones must add coverage only for the new API/runtime/delegation/archive surfaces they introduce rather than duplicate the existing mutation suite.
 
 ### Failover
 
@@ -897,16 +913,17 @@ MFK-003 — Add fork architecture and decision documentation             DONE
 MFK-004 — Record hierarchy ADRs                                        DONE
 MFK-005 — Record failover ADRs                                         DONE
 MFK-006 — Establish upstream regression baseline                       DONE
-MFK-007 — Activate Project Hierarchy implementation                    READY FOR MERGE
+MFK-007 — Activate Project Hierarchy implementation                    DONE
+MFK-008 — Reconcile hierarchy roadmap and autonomous workflow          IN PROGRESS
 ```
 
 ### Hierarchy
 
 ```text
-HIER-001 — Introduce Project hierarchy schema                          BLOCKED UNTIL MFK-007 MERGES
-HIER-002 — Implement ProjectHierarchyService
-HIER-003 — Enforce cycle-safe concurrent mutations
-HIER-004 — Implement hierarchy API
+HIER-001 — Introduce Project hierarchy schema                          DONE
+HIER-002 — Implement authoritative ProjectHierarchyService             DONE
+HIER-003 — Enforce cycle-safe concurrent mutations                     DONE / SUBSUMED BY HIER-002
+HIER-004 — Implement hierarchy API                                     NEXT
 HIER-005 — Implement hierarchy CLI
 HIER-006 — Add Project hierarchy briefing
 HIER-007 — Add hierarchy-aware delegation
@@ -917,7 +934,9 @@ HIER-011 — Add Project hierarchy Web UI
 HIER-012 — Add Mobile hierarchy support
 ```
 
-HIER-001 is Issue #14. Its data-model scope is intentionally minimal and must revalidate upstream HEAD/migration head before implementation and merge. Assuming upstream remains at `572_*`, `573` is only a candidate first fork migration number, not a reservation.
+HIER-001 is Issue #14. HIER-002 is Issue #17. Its accepted scope deliberately absorbed the Project-row serialization, full final-tree/cycle validation and concurrent mutation tests originally listed as HIER-003. Therefore HIER-003 is a completed roadmap milestone, not a second implementation of the same mutation domain.
+
+The next product implementation work is HIER-004. It must expose hierarchy behavior through a narrow adapter around the authoritative `server/internal/projecthierarchy` service rather than moving business rules into handlers.
 
 ### Failover
 
@@ -1031,35 +1050,41 @@ Implementation ordering remains hierarchy first, failover second, unless new evi
 
 ## 24. Development Workflow
 
-Initial implementation model:
+Standing implementation model:
 
 ```text
-Human owner
+accepted requirements / repository evidence
     ↓
-Architecture / ADR review
+architecture / ADR when structurally required
     ↓
 GitHub Issue
     ↓
-Local implementation Agent
+autonomous repository implementation Agent
     ↓
-feature branch
+focused branch
     ↓
-implementation + tests
+implementation + available tests
     ↓
 Pull Request
     ↓
-review
+CI + diff + upstream/compatibility review
     ↓
-human-approved merge
+merge
+    ↓
+post-merge verification
 ```
 
-The implementation Agent may inspect/edit/run tests/open PRs, but it must not silently redefine accepted architecture or perform broad unrelated refactors.
+The repository Agent may carry repository-capable work through merge without a separate per-PR human approval when it remains within accepted architecture and the approved Issue scope.
 
-After the process stabilizes, development may move to a controlled Multica Squad and eventually dogfood the Project Hierarchy feature itself.
+Human/local handoff is reserved for tests/executions unavailable through repository tooling or genuinely new external product choices not established by accepted requirements or repository evidence. When a handoff is required, request only the minimum command/test and evidence needed.
+
+The implementation Agent must not silently redefine accepted architecture, bypass regression/upstream gates or perform broad unrelated refactors.
+
+Development may later move to a controlled Multica Squad and eventually dogfood the Project Hierarchy feature itself.
 
 ---
 
-## 25. Current Foundation / Activation Status
+## 25. Current Foundation / Hierarchy Status
 
 Completed in repository history:
 
@@ -1070,35 +1095,21 @@ MFK-003 — repository-resident architecture and ADR conventions
 MFK-004 — Project Hierarchy ADR-001 through ADR-006 accepted
 MFK-005 — Primary/Fallback ADR-007 through ADR-013 accepted
 MFK-006 — Upstream regression baseline and pre-implementation gates established
+MFK-007 — Project Hierarchy implementation activated under ADR-014
+HIER-001 — Project hierarchy persistence/lifecycle cleanup merged as b18922193e78e4ef898a1737f55c422bda2aefb7
+HIER-002 — authoritative hierarchy mutation service merged as 2a2cdde768078f6ad026eff6d6a503b359747351
+HIER-003 — cycle-safe concurrent mutation milestone satisfied by HIER-002
 ```
 
-MFK-007 activation is complete at the architectural/documentation level and awaiting merge:
+Latest revalidated upstream `main` at the HIER-002 final gate:
 
 ```text
-ADR-014 — Upstream compatibility strategy accepted
-Issue #14 — HIER-001 created and blocked until MFK-007 merges
-No product migration/schema/runtime behavior implemented yet
+83527872634824012dd26bb183aa216fab631c05
 ```
 
-Fork `main` base for MFK-007:
+HIER-002 preserves public API/CLI/UI/runtime/daemon/Squad/failover behavior and isolates the new write domain under `server/internal/projecthierarchy` plus hierarchy-owned SQLC queries.
 
-```text
-4009d06d3f5fcf2ad5fbf6f226cb89ae701f698f
-```
-
-Current investigated upstream `main`:
-
-```text
-52b26900c51f759b87707b4ea35fa9f141b83b52
-```
-
-Observed upstream migration head at activation review:
-
-```text
-572_*
-```
-
-The immediate next product work after MFK-007 merges is HIER-001: introduce the minimal Project hierarchy persistence model and lifecycle cleanup plumbing while preserving the regression gates in `docs/fork/REGRESSION_BASELINE.md`.
+MFK-008 reconciles repository governance and roadmap documentation with this implemented state. After MFK-008, the immediate next product milestone is HIER-004: design and implement the Project hierarchy API against the current upstream handler/router/type/error conventions while delegating all structural mutations to the authoritative hierarchy service.
 
 ---
 

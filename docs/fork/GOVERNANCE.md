@@ -26,7 +26,7 @@ The repository uses the following hierarchy of authority:
 
 Agent-generated implementation notes are not architectural authority by themselves.
 
-If implementation evidence contradicts an accepted ADR, the structural change must stop and the decision must be reviewed before proceeding.
+If implementation evidence contradicts an accepted ADR, the affected structural implementation must stop until the contradiction is resolved through repository evidence and, when the structural decision changes, an ADR update or superseding ADR.
 
 ## Protected Branch
 
@@ -39,7 +39,7 @@ The active repository ruleset requires:
 - protection against branch deletion;
 - protection against non-fast-forward / force-push updates.
 
-The repository currently requires zero approving reviews because there is one primary human maintainer. This may be increased when additional maintainers or a governed review workflow are established.
+The repository currently requires zero approving reviews because there is one primary human maintainer and the repository workflow has standing authorization for governed autonomous execution.
 
 No normal development work is performed directly on `main`.
 
@@ -81,7 +81,47 @@ A pull request should identify:
 - migration impact, when applicable;
 - known upstream-sync risk.
 
-Structural changes should not be merged only because tests pass. They must also remain consistent with accepted architecture.
+Structural changes should not be merged only because tests pass. They must also remain consistent with accepted architecture and complete the compatibility review described below.
+
+## Merge Authority and Human Handoff
+
+The maintainer has granted standing authority for repository-capable work to proceed autonomously through the normal governed workflow.
+
+When work remains inside accepted architecture and an approved Issue scope, the repository agent may independently:
+
+```text
+investigate
+  ↓
+create/refine Issue
+  ↓
+create branch
+  ↓
+implement
+  ↓
+run available validation
+  ↓
+open/update PR
+  ↓
+inspect CI and review findings
+  ↓
+perform final upstream/compatibility review
+  ↓
+merge
+  ↓
+verify post-merge state
+```
+
+A separate per-PR human approval is not required solely because the change is structural. Passing CI alone is still insufficient: accepted ADRs, Issue scope, regression gates, upstream revalidation and compatibility review remain mandatory.
+
+Human/local handoff is required only when the next necessary action cannot be completed through available repository tooling or when the requirement itself needs external product input that is not established by accepted project decisions. Typical examples include:
+
+- local Docker/PostgreSQL validation unavailable in CI;
+- host-specific runtime or daemon behavior that cannot be reproduced remotely;
+- manual application/game/UI behavior that requires human observation;
+- credentials, hardware or external environments not available to the repository agent;
+- a genuinely new product choice for which repository evidence and accepted requirements do not establish the intended behavior.
+
+When a local handoff is necessary, request only the minimum command/test and evidence needed to unblock the governed workflow.
 
 ## Merge Policy
 
@@ -182,29 +222,34 @@ At minimum, ADRs are expected for:
 
 Implementation agents may:
 
-- inspect the repository;
+- inspect the repository and upstream;
+- create/refine governed Issues;
+- create focused branches;
 - edit files on a feature branch;
-- run local commands;
-- run tests;
-- inspect diffs;
+- run available local/remote commands and tests;
+- inspect diffs and CI logs;
 - create commits;
-- open pull requests.
+- open and maintain pull requests;
+- merge their governed work after all required gates pass;
+- perform post-merge verification and documentation/state reconciliation.
 
 Implementation agents must not:
 
 - redefine accepted architecture silently;
-- merge their own structural changes without human governance;
-- bypass the protected-branch workflow;
+- bypass the Issue/ADR/protected-branch workflow;
+- merge while required CI, regression or compatibility gates are unresolved;
 - perform broad unrelated refactors;
 - create parallel mechanisms when Multica already has an appropriate one;
-- retry potentially side-effecting partial executions without an approved safety policy.
+- retry potentially side-effecting partial executions without an approved safety policy;
+- conceal implementation evidence that invalidates an accepted assumption.
 
-When implementation evidence invalidates an assumption, the agent should document the evidence and stop the affected structural change.
+When implementation evidence invalidates an assumption, document the evidence before continuing. If the existing ADR no longer supports the required structural mechanism, update or supersede the ADR before implementing the changed architecture.
 
 ## Compatibility Review
 
 Before merging a structural change, review:
 
+- current upstream HEAD and relevant upstream behavior;
 - number of existing upstream files modified;
 - whether a new isolated module could reduce those modifications;
 - database backward compatibility;
