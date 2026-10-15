@@ -1,0 +1,47 @@
+name: HIER-004 test cleanup patch
+
+on:
+  push:
+    branches:
+      - feat/HIER-004-project-hierarchy-api
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/HIER-004-project-hierarchy-api
+          fetch-depth: 0
+
+      - name: Align hierarchy test cleanup with fixture ordering
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("server/internal/handler/project_hierarchy_test.go")
+          text = path.read_text()
+          text = text.replace('\t"context"\n', '', 1)
+          old = '''\t// project_agent_membership deliberately has no FK/cascade. Delete rows\n\t// before the Fixture removes the Project so this test leaves no history.\n\tt.Cleanup(func() {\n\t\t_, _ = testPool.Exec(context.Background(), `DELETE FROM project_agent_membership WHERE project_id = $1::uuid`, projectID)\n\t})\n'''
+          new = '''\t// project_agent_membership deliberately has no FK/cascade. Register this\n\t// cleanup on the Fixture stack so it runs before Fixture deletes Project.\n\tdbfx.Cleanup(t, "DELETE FROM project_agent_membership WHERE project_id = $1::uuid", projectID)\n'''
+          if new in text:
+              print("HIER-004 cleanup already patched")
+          elif old not in text:
+              raise SystemExit("expected hierarchy cleanup block not found")
+          else:
+              path.write_text(text.replace(old, new, 1))
+
+      - name: Commit test cleanup change when needed
+        run: |
+          if git diff --quiet -- server/internal/handler/project_hierarchy_test.go; then
+            echo "No test cleanup change required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/internal/handler/project_hierarchy_test.go
+          git commit -m "test: clean hierarchy memberships before fixture project cleanup"
+          git push origin HEAD:feat/HIER-004-project-hierarchy-api
