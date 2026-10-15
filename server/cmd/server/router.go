@@ -2138,6 +2138,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Post("/resources", h.CreateProjectResource)
 					r.Put("/resources/{resourceId}", h.UpdateProjectResource)
 					r.Delete("/resources/{resourceId}", h.DeleteProjectResource)
+					r.Get("/hierarchy", h.GetProjectHierarchy)
+					r.Post("/hierarchy/memberships", h.CreateProjectHierarchyMembership)
+					r.Put("/hierarchy/memberships/{membershipId}/manager", h.ReparentProjectHierarchyMembership)
+					r.Delete("/hierarchy/memberships/{membershipId}", h.ArchiveProjectHierarchyMembership)
+					r.Put("/hierarchy/structure", h.ApplyProjectHierarchyStructure)
 				})
 			})
 
