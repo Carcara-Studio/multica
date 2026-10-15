@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/multica-ai/multica/server/internal/testutil"
 )
 
 func hierarchyAPIProject(t *testing.T) string {
@@ -196,13 +197,34 @@ func TestProjectHierarchyAPIValidationAndDomainMapping(t *testing.T) {
 		}
 	})
 
-	t.Run("malformed ids", func(t *testing.T) {
+	t.Run("malformed project id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := newRequest(http.MethodGet, "/api/projects/not-a-uuid/hierarchy", nil)
+		req = withURLParam(req, "id", "not-a-uuid")
+		testHandler.GetProjectHierarchy(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s, want 400", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("malformed agent id", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req := newRequest(http.MethodPost, "/api/projects/"+projectID+"/hierarchy/memberships", CreateProjectHierarchyMembershipRequest{
 			AgentID: "not-a-uuid",
 		})
 		req = withURLParam(req, "id", projectID)
 		testHandler.CreateProjectHierarchyMembership(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s, want 400", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("malformed membership id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := newRequest(http.MethodDelete, "/api/projects/"+projectID+"/hierarchy/memberships/not-a-uuid", nil)
+		req = withURLParam(req, "id", projectID)
+		req = withURLParam(req, "membershipId", "not-a-uuid")
+		testHandler.ArchiveProjectHierarchyMembership(w, req)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s, want 400", w.Code, w.Body.String())
 		}
@@ -254,7 +276,56 @@ func TestProjectHierarchyAPIValidationAndDomainMapping(t *testing.T) {
 		}
 	})
 
-	if root.ID == "" {
-		t.Fatal("root fixture unexpectedly empty")
-	}
+	t.Run("archived agent conflict", func(t *testing.T) {
+		archivedAgent := dbfx.Agent(t, "archived hierarchy api "+uuid.NewString(), "", testutil.Cols{
+			"archived_at": testutil.Raw("now()"),
+		})
+		w := httptest.NewRecorder()
+		req := newRequest(http.MethodPost, "/api/projects/"+projectID+"/hierarchy/memberships", CreateProjectHierarchyMembershipRequest{
+			AgentID:             archivedAgent,
+			ManagerMembershipID: &root.ID,
+			Title:               "Archived Engineer",
+		})
+		req = withURLParam(req, "id", projectID)
+		testHandler.CreateProjectHierarchyMembership(w, req)
+		if w.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s, want 409", w.Code, w.Body.String())
+		}
+		var payload map[string]any
+		_ = json.NewDecoder(w.Body).Decode(&payload)
+		if payload["code"] != "agent_archived" {
+			t.Fatalf("code=%v, want agent_archived", payload["code"])
+		}
+		body := strings.ToLower(w.Body.String())
+		if strings.Contains(body, "project_agent_membership") || strings.Contains(body, "select ") || strings.Contains(body, "insert ") {
+			t.Fatalf("response leaked persistence internals: %s", w.Body.String())
+		}
+	})
+
+	t.Run("cross workspace agent conflict", func(t *testing.T) {
+		otherWorkspace := dbfx.Workspace(t, "Hierarchy API Other", "hierarchy-api-other-"+uuid.NewString())
+		crossWorkspaceAgent := dbfx.Agent(t, "cross workspace hierarchy api "+uuid.NewString(), "", testutil.Cols{
+			"workspace_id": otherWorkspace,
+		})
+		w := httptest.NewRecorder()
+		req := newRequest(http.MethodPost, "/api/projects/"+projectID+"/hierarchy/memberships", CreateProjectHierarchyMembershipRequest{
+			AgentID:             crossWorkspaceAgent,
+			ManagerMembershipID: &root.ID,
+			Title:               "Foreign Engineer",
+		})
+		req = withURLParam(req, "id", projectID)
+		testHandler.CreateProjectHierarchyMembership(w, req)
+		if w.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s, want 409", w.Code, w.Body.String())
+		}
+		var payload map[string]any
+		_ = json.NewDecoder(w.Body).Decode(&payload)
+		if payload["code"] != "agent_not_eligible" {
+			t.Fatalf("code=%v, want agent_not_eligible", payload["code"])
+		}
+		body := strings.ToLower(w.Body.String())
+		if strings.Contains(body, "project_agent_membership") || strings.Contains(body, "select ") || strings.Contains(body, "insert ") {
+			t.Fatalf("response leaked persistence internals: %s", w.Body.String())
+		}
+	})
 }
