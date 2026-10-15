@@ -1,0 +1,47 @@
+name: HIER-004 route patch
+
+on:
+  push:
+    branches:
+      - feat/HIER-004-project-hierarchy-api
+
+permissions:
+  contents: write
+
+jobs:
+  patch-router:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/HIER-004-project-hierarchy-api
+          fetch-depth: 0
+
+      - name: Register hierarchy routes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("server/cmd/server/router.go")
+          text = path.read_text()
+          marker = '''\t\t\t\t\tr.Get("/resources", h.ListProjectResources)\n\t\t\t\t\tr.Post("/resources", h.CreateProjectResource)\n\t\t\t\t\tr.Put("/resources/{resourceId}", h.UpdateProjectResource)\n\t\t\t\t\tr.Delete("/resources/{resourceId}", h.DeleteProjectResource)\n'''
+          replacement = marker + '''\t\t\t\t\tr.Get("/hierarchy", h.GetProjectHierarchy)\n\t\t\t\t\tr.Post("/hierarchy/memberships", h.CreateProjectHierarchyMembership)\n\t\t\t\t\tr.Put("/hierarchy/memberships/{membershipId}/manager", h.ReparentProjectHierarchyMembership)\n\t\t\t\t\tr.Delete("/hierarchy/memberships/{membershipId}", h.ArchiveProjectHierarchyMembership)\n\t\t\t\t\tr.Put("/hierarchy/structure", h.ApplyProjectHierarchyStructure)\n'''
+
+          if replacement in text:
+              print("HIER-004 routes already registered")
+          elif marker not in text:
+              raise SystemExit("expected Project resource route block not found")
+          else:
+              path.write_text(text.replace(marker, replacement, 1))
+
+      - name: Commit router change when needed
+        run: |
+          if git diff --quiet -- server/cmd/server/router.go; then
+            echo "No router change required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/cmd/server/router.go
+          git commit -m "feat: register project hierarchy API routes"
+          git push origin HEAD:feat/HIER-004-project-hierarchy-api
