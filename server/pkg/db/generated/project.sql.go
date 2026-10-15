@@ -78,7 +78,14 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 }
 
 const deleteProject = `-- name: DeleteProject :exec
-DELETE FROM project WHERE id = $1 AND workspace_id = $2
+WITH deleted_hierarchy_memberships AS (
+    DELETE FROM project_agent_membership AS pam
+    WHERE pam.project_id = $1::uuid
+      AND pam.workspace_id = $2::uuid
+)
+DELETE FROM project AS p
+WHERE p.id = $1::uuid
+  AND p.workspace_id = $2::uuid
 `
 
 type DeleteProjectParams struct {
@@ -86,7 +93,9 @@ type DeleteProjectParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-// Defense-in-depth: workspace_id is a SQL-layer tenant guard. See DeleteIssue.
+// Defense-in-depth: workspace_id is a SQL-layer tenant guard. Hierarchy
+// memberships are application-owned (no FK/cascade), so delete them in the
+// same locked transaction before removing the Project row.
 func (q *Queries) DeleteProject(ctx context.Context, arg DeleteProjectParams) error {
 	_, err := q.db.Exec(ctx, deleteProject, arg.ID, arg.WorkspaceID)
 	return err
