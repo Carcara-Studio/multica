@@ -1,0 +1,202 @@
+name: MFK-010 one-shot reconciliation
+
+on:
+  push:
+    branches:
+      - sync/upstream-2026-10-16-work
+    paths:
+      - .github/workflows/mfk010-reconcile.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sync work branch
+        uses: actions/checkout@v6
+        with:
+          ref: sync/upstream-2026-10-16-work
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "~1.26.9"
+          check-latest: true
+          cache-dependency-path: server/go.sum
+
+      - name: Reapply fork hierarchy delta on latest upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one replacement target, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "server/cmd/server/router.go",
+              '\t\t\t\t\tr.Delete("/resources/{resourceId}", h.DeleteProjectResource)\n',
+              '\t\t\t\t\tr.Delete("/resources/{resourceId}", h.DeleteProjectResource)\n'
+              '\t\t\t\t\tr.Get("/hierarchy", h.GetProjectHierarchy)\n'
+              '\t\t\t\t\tr.Post("/hierarchy/memberships", h.CreateProjectHierarchyMembership)\n'
+              '\t\t\t\t\tr.Put("/hierarchy/memberships/{membershipId}/manager", h.ReparentProjectHierarchyMembership)\n'
+              '\t\t\t\t\tr.Delete("/hierarchy/memberships/{membershipId}", h.ArchiveProjectHierarchyMembership)\n'
+              '\t\t\t\t\tr.Put("/hierarchy/structure", h.ApplyProjectHierarchyStructure)\n',
+          )
+
+          replace_once(
+              "server/internal/handler/workspace_delete_manifest_test.go",
+              '\t"project":                            workspaceDelete,\n',
+              '\t"project":                            workspaceDelete,\n'
+              '\t"project_agent_membership":           workspaceDelete,\n',
+          )
+
+          replace_once(
+              "server/pkg/db/queries/project.sql",
+              "-- name: DeleteProject :exec\n"
+              "-- Defense-in-depth: workspace_id is a SQL-layer tenant guard. See DeleteIssue.\n"
+              "DELETE FROM project WHERE id = $1 AND workspace_id = $2;\n",
+              "-- name: DeleteProject :exec\n"
+              "-- Defense-in-depth: workspace_id is a SQL-layer tenant guard. Hierarchy\n"
+              "-- memberships are application-owned (no FK/cascade), so delete them in the\n"
+              "-- same locked transaction before removing the Project row.\n"
+              "WITH deleted_hierarchy_memberships AS (\n"
+              "    DELETE FROM project_agent_membership AS pam\n"
+              "    WHERE pam.project_id = sqlc.arg('id')::uuid\n"
+              "      AND pam.workspace_id = sqlc.arg('workspace_id')::uuid\n"
+              ")\n"
+              "DELETE FROM project AS p\n"
+              "WHERE p.id = sqlc.arg('id')::uuid\n"
+              "  AND p.workspace_id = sqlc.arg('workspace_id')::uuid;\n",
+          )
+
+          p = Path("server/cmd/migrate/migrate_project_hierarchy_test.go")
+          text = p.read_text()
+          mapping = {
+              "573_project_agent_membership": "900000_project_agent_membership",
+              "574_project_agent_membership_id_idx": "900001_project_agent_membership_id_idx",
+              "575_project_agent_membership_project_agent_idx": "900002_project_agent_membership_project_agent_idx",
+              "576_project_agent_membership_active_root_idx": "900003_project_agent_membership_active_root_idx",
+              "577_project_agent_membership_manager_idx": "900004_project_agent_membership_manager_idx",
+              "578_project_agent_membership_workspace_idx": "900005_project_agent_membership_workspace_idx",
+              "579_project_agent_membership_primary_key": "900006_project_agent_membership_primary_key",
+          }
+          for old, new in mapping.items():
+              if old not in text:
+                  raise SystemExit(f"migration test missing expected version {old}")
+              text = text.replace(old, new)
+          p.write_text(text)
+          PY
+
+          git mv server/migrations/573_project_agent_membership.up.sql server/migrations/900000_project_agent_membership.up.sql
+          git mv server/migrations/573_project_agent_membership.down.sql server/migrations/900000_project_agent_membership.down.sql
+          git mv server/migrations/574_project_agent_membership_id_idx.up.sql server/migrations/900001_project_agent_membership_id_idx.up.sql
+          git mv server/migrations/574_project_agent_membership_id_idx.down.sql server/migrations/900001_project_agent_membership_id_idx.down.sql
+          git mv server/migrations/575_project_agent_membership_project_agent_idx.up.sql server/migrations/900002_project_agent_membership_project_agent_idx.up.sql
+          git mv server/migrations/575_project_agent_membership_project_agent_idx.down.sql server/migrations/900002_project_agent_membership_project_agent_idx.down.sql
+          git mv server/migrations/576_project_agent_membership_active_root_idx.up.sql server/migrations/900003_project_agent_membership_active_root_idx.up.sql
+          git mv server/migrations/576_project_agent_membership_active_root_idx.down.sql server/migrations/900003_project_agent_membership_active_root_idx.down.sql
+          git mv server/migrations/577_project_agent_membership_manager_idx.up.sql server/migrations/900004_project_agent_membership_manager_idx.up.sql
+          git mv server/migrations/577_project_agent_membership_manager_idx.down.sql server/migrations/900004_project_agent_membership_manager_idx.down.sql
+          git mv server/migrations/578_project_agent_membership_workspace_idx.up.sql server/migrations/900005_project_agent_membership_workspace_idx.up.sql
+          git mv server/migrations/578_project_agent_membership_workspace_idx.down.sql server/migrations/900005_project_agent_membership_workspace_idx.down.sql
+          git mv server/migrations/579_project_agent_membership_primary_key.up.sql server/migrations/900006_project_agent_membership_primary_key.up.sql
+          git mv server/migrations/579_project_agent_membership_primary_key.down.sql server/migrations/900006_project_agent_membership_primary_key.down.sql
+
+          sed -i 's/migration 574/migration 900001/' server/migrations/900006_project_agent_membership_primary_key.up.sql
+
+          cat > server/cmd/migrate/project_hierarchy_indexes.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"fmt"
+
+          	"github.com/jackc/pgx/v5/pgxpool"
+          )
+
+          // Keep fork-owned concurrent-index registrations isolated from the upstream
+          // migration registry while still wiring both registries that the migrator uses.
+          // The fork uses a reserved high-number migration band so upstream can continue
+          // allocating its normal sequential prefixes without repeated filename collisions.
+          func init() {
+          	indexes := map[string]string{
+          		"900001_project_agent_membership_id_idx":            "project_agent_membership_id_idx",
+          		"900002_project_agent_membership_project_agent_idx": "project_agent_membership_project_agent_idx",
+          		"900003_project_agent_membership_active_root_idx":    "project_agent_membership_active_root_idx",
+          		"900004_project_agent_membership_manager_idx":        "project_agent_membership_manager_idx",
+          		"900005_project_agent_membership_workspace_idx":      "project_agent_membership_workspace_idx",
+          	}
+          	for version, index := range indexes {
+          		concurrentIndexCleanups[version] = index
+          		preMigrationHooks[version] = cleanupInvalidConcurrentIndexHook(index)
+          	}
+
+          	// Installations that already applied the hierarchy under its original
+          	// 573-579 fork-only filenames already have the primary key. The renamed
+          	// 900001/900006 steps must then be ledger-convergence no-ops instead of
+          	// building a redundant unique index or attempting a second primary key.
+          	upMigrationConditions["900001_project_agent_membership_id_idx"] = whenProjectHierarchyPrimaryKeyMissing
+          	upMigrationConditions["900006_project_agent_membership_primary_key"] = whenProjectHierarchyPrimaryKeyMissing
+          }
+
+          func whenProjectHierarchyPrimaryKeyMissing(ctx context.Context, conn *pgxpool.Conn) (bool, string, error) {
+          	var name, definition string
+          	err := conn.QueryRow(ctx, `
+          SELECT c.conname, pg_get_constraintdef(c.oid)
+          FROM pg_constraint AS c
+          WHERE c.conrelid = to_regclass('project_agent_membership')
+            AND c.contype = 'p'
+          `).Scan(&name, &definition)
+          	if err != nil {
+          		// No table or no primary key yet: the migration should apply normally.
+          		// QueryRow returns no rows in both cases because to_regclass(NULL) does
+          		// not match any constraint.
+          		if err.Error() == "no rows in result set" {
+          			return true, "", nil
+          		}
+          		return false, "", fmt.Errorf("inspect project hierarchy primary key: %w", err)
+          	}
+          	if name != "project_agent_membership_pkey" || definition != "PRIMARY KEY (id)" {
+          		return false, "", fmt.Errorf("unexpected project hierarchy primary key %q: %s", name, definition)
+          	}
+          	return false, "project hierarchy primary key already present from legacy fork migration numbering", nil
+          }
+          EOF
+
+          gofmt -w server/cmd/migrate/project_hierarchy_indexes.go server/cmd/migrate/migrate_project_hierarchy_test.go
+
+      - name: Regenerate sqlc from reconciled schema and queries
+        run: make sqlc
+
+      - name: Validate generated diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          grep -q 'type ProjectAgentMembership struct' server/pkg/db/generated/models.go
+          grep -q 'DELETE FROM project_agent_membership AS pam' server/pkg/db/generated/project.sql.go
+          grep -q 'r.Get("/hierarchy", h.GetProjectHierarchy)' server/cmd/server/router.go
+          grep -q '"project_agent_membership":' server/internal/handler/workspace_delete_manifest_test.go
+
+      - name: Commit reconciled sync state and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/mfk010-reconcile.yml
+          git config user.name "multica-fork-sync"
+          git config user.email "github@carcara-studio.invalid"
+          git add -A
+          git diff --cached --check
+          git commit -m "MFK-010: reapply hierarchy on latest upstream"
+          git push origin HEAD:sync/upstream-2026-10-16-work
