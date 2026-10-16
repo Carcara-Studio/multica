@@ -25,7 +25,7 @@ function request<T>(client: ApiClient, path: string, init?: RequestInit): Promis
   if (typeof internalRequest !== "function") {
     throw new Error("ApiClient request primitive is unavailable");
   }
-  return internalRequest.call(client, path, init);
+  return internalRequest.call(client, path, init) as Promise<T>;
 }
 
 function projectPath(projectId: string): string {

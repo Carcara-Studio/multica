@@ -71,13 +71,13 @@ describe("projectHierarchyToTree", () => {
       "b",
       "z",
     ]);
-    expect(result.root.children[0].children.map((node) => node.membership.id)).toEqual([
+    const backend = result.root.children[0]!;
+    expect(backend.children.map((node) => node.membership.id)).toEqual([
       "b1",
       "b2",
     ]);
-    expect(result.root.children[0].children[0].children[0].membership.id).toBe(
-      "deep",
-    );
+    const backendLead = backend.children[0]!;
+    expect(backendLead.children[0]!.membership.id).toBe("deep");
   });
 
   it("uses membership id rather than agent id as structural identity", () => {
@@ -90,7 +90,7 @@ describe("projectHierarchyToTree", () => {
     expect(result.ok).toBe(true);
     if (!result.ok || !result.root) return;
     expect(result.root.membership.id).toBe("root");
-    expect(result.root.children[0].membership.id).toBe("child");
+    expect(result.root.children[0]!.membership.id).toBe("child");
   });
 
   it("rejects a total mismatch", () => {

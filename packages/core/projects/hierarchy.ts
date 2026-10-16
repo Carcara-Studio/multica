@@ -130,6 +130,14 @@ export function projectHierarchyToTree(
       message: `Hierarchy contains ${roots.length} roots.`,
     };
   }
+  const root = roots[0];
+  if (!root) {
+    return {
+      ok: false,
+      code: "missing_root",
+      message: "Hierarchy has memberships but no root.",
+    };
+  }
 
   for (const membership of memberships) {
     const managerId = membership.manager_membership_id;
@@ -186,7 +194,7 @@ export function projectHierarchyToTree(
 
   return {
     ok: true,
-    root: buildNode(roots[0]),
+    root: buildNode(root),
     count: memberships.length,
   };
 }
