@@ -209,7 +209,10 @@ function ProjectHierarchyDialog({
     () => (response ? projectHierarchyToTree(response) : null),
     [response],
   );
-  const memberships = response?.memberships ?? [];
+  const memberships = useMemo(
+    () => response?.memberships ?? [],
+    [response],
+  );
   const availableAgents = useMemo(
     () => availableHierarchyAgents(agents, memberships),
     [agents, memberships],
@@ -560,7 +563,7 @@ function HierarchyNode({
               {membership.title}
             </span>
             {isRoot && (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-micro text-muted-foreground">
+              <span className="rounded-xs bg-muted px-1.5 py-0.5 text-micro text-muted-foreground">
                 {t(($) => $.hierarchy.root_badge)}
               </span>
             )}
