@@ -11,23 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hierarchy-component-tests:
-    name: hierarchy component - ${{ matrix.group }}
+  shard-one-captured:
+    name: views shard 1/2 captured
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - group: full-file
-            pattern: ""
-          - group: empty-and-depth
-            pattern: "shows the empty summary|renders arbitrary depth"
-          - group: create-and-add
-            pattern: "creates the first root|adds a direct report"
-          - group: reparent-and-root
-            pattern: "reparents a non-root|promotes a new root"
-          - group: archive-and-conflict
-            pattern: "offers Archive|shows a 409 conflict"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -44,12 +30,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Run targeted hierarchy tests
-        env:
-          TEST_PATTERN: ${{ matrix.pattern }}
+      - name: Run shard and print only failure tail
+        shell: bash
         run: |
-          if [ -n "$TEST_PATTERN" ]; then
-            pnpm --filter='@multica/views' exec vitest run projects/components/project-hierarchy-section.test.tsx --reporter=verbose -t "$TEST_PATTERN"
-          else
-            pnpm --filter='@multica/views' exec vitest run projects/components/project-hierarchy-section.test.tsx --reporter=verbose
+          set +e
+          pnpm --filter='@multica/views' exec vitest run --shard=1/2 --reporter=verbose > /tmp/views-shard-1.log 2>&1
+          status=$?
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            echo '--- BEGIN VITEST FAILURE TAIL ---'
+            tail -n 220 /tmp/views-shard-1.log
+            echo '--- END VITEST FAILURE TAIL ---'
+            exit "$status"
           fi
+
+          echo 'views shard 1/2 passed'
