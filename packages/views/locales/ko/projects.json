@@ -157,7 +157,6 @@
     "setup": "설정",
     "not_configured": "설정되지 않음",
     "empty_hint": "이 프로젝트에서 누가 누구에게 보고하는지 정의합니다.",
-    "member_count_one": "계층 멤버 {{count}}명",
     "member_count_other": "계층 멤버 {{count}}명",
     "load_failed": "프로젝트 계층을 불러오지 못했습니다.",
     "retry": "다시 시도",

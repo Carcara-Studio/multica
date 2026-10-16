@@ -157,7 +157,6 @@
     "setup": "設定",
     "not_configured": "未設定",
     "empty_hint": "このプロジェクト内の指揮系統を定義します。",
-    "member_count_one": "階層メンバー {{count}} 件",
     "member_count_other": "階層メンバー {{count}} 件",
     "load_failed": "プロジェクト階層を読み込めませんでした。",
     "retry": "再試行",

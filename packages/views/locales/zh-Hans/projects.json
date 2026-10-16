@@ -157,7 +157,6 @@
     "setup": "设置",
     "not_configured": "未配置",
     "empty_hint": "定义此项目中智能体之间的汇报关系。",
-    "member_count_one": "{{count}} 个层级成员",
     "member_count_other": "{{count}} 个层级成员",
     "load_failed": "无法加载项目层级。",
     "retry": "重试",
