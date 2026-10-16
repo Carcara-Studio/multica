@@ -107,12 +107,16 @@ The objective is not to make the conflict disappear. The objective is to preserv
 Pay special attention to:
 
 ```text
+server/cmd/server/router.go
+server/migrations/
+server/cmd/migrate/
 server/internal/service/task.go
 server/internal/handler/agent.go
 server/internal/handler/daemon.go
 server/pkg/protocol/messages.go
 server/internal/daemon/
 server/internal/handler/squad_briefing.go
+packages/views/projects/components/project-detail.tsx
 ```
 
 These are current known or expected hotspots and must be revalidated over time.
@@ -128,6 +132,23 @@ For architecture-sensitive conflicts:
 5. avoid blindly restoring the previous fork implementation.
 
 If the upstream change invalidates an ADR assumption, pause the sync decision and update the ADR before completing the structural resolution.
+
+## Fork Migration Namespace
+
+ADR-015 reserves the `900000+` numeric band for fork-owned database migrations.
+
+Do not allocate new fork migrations from upstream's normal sequential range. During every upstream synchronization:
+
+1. inspect the latest upstream `server/migrations/` tail;
+2. confirm upstream has not entered the fork's reserved band;
+3. preserve upstream migration files exactly;
+4. keep fork migrations in the reserved band;
+5. if a previously published fork migration must be renumbered, add an explicit legacy-ledger upgrade regression test;
+6. prefer idempotent DDL and read-only migration conditions to automatic deletion or rewriting of historical `schema_migrations` rows.
+
+Fork migration numbers intentionally do not imply chronological adjacency to upstream migrations. A fork migration that depends on an upstream schema capability must express and test that dependency rather than relying on neighboring numeric prefixes.
+
+If upstream approaches `900000`, stop allocating fork migrations and amend ADR-015 before choosing another reserved range.
 
 ## Validation After Sync
 
@@ -150,7 +171,8 @@ As the project matures, the required validation should include:
 - daemon/runtime tests;
 - fork regression tests;
 - migration tests;
-- concurrency tests for affected subsystems.
+- concurrency tests for affected subsystems;
+- generated SQLC consistency when schema or queries changed.
 
 ## Sync Pull Request
 
@@ -171,6 +193,9 @@ Conflicts:
 
 Fork-specific files re-applied:
 <list>
+
+Migration namespace impact:
+<none or explanation>
 
 Tests:
 <commands/results>
@@ -213,6 +238,7 @@ rebase published fork main
 squash full upstream synchronization
 copy upstream files manually instead of merging Git history
 resolve conflicts without understanding the upstream semantic change
+allocate fork migrations inside upstream's active sequential migration range
 ```
 
 ## Long-term Goal
