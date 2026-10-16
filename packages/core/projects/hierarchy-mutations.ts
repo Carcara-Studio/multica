@@ -13,6 +13,7 @@ export function useCreateProjectHierarchyMembership(projectId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
+    retry: false,
     mutationFn: (data: CreateProjectHierarchyMembershipRequest) =>
       projectHierarchyApi.createMembership(projectId, data),
     onSettled: () => {
@@ -25,6 +26,7 @@ export function useReparentProjectHierarchyMembership(projectId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
+    retry: false,
     mutationFn: ({
       membershipId,
       data,
@@ -42,6 +44,7 @@ export function useArchiveProjectHierarchyMembership(projectId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
+    retry: false,
     mutationFn: (membershipId: string) =>
       projectHierarchyApi.archiveMembership(projectId, membershipId),
     onSettled: () => {
@@ -54,6 +57,7 @@ export function useApplyProjectHierarchyStructure(projectId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
+    retry: false,
     mutationFn: (data: ApplyProjectHierarchyStructureRequest) =>
       projectHierarchyApi.applyStructure(projectId, data),
     onSuccess: (hierarchy: ProjectHierarchyResponse) => {
