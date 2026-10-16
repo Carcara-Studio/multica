@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  normalize-plurals-and-verify:
-    name: normalize locale plurals and verify views shard
+  isolate-project-detail-and-verify:
+    name: isolate ProjectDetail child and verify views shard
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,36 +35,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Remove dead singular plural keys
+      - name: Isolate hierarchy child in ProjectDetail tests
         shell: bash
         run: |
           python3 <<'PY'
-          import json
           from pathlib import Path
 
-          for locale in ("ja", "ko", "zh-Hans"):
-              path = Path(f"packages/views/locales/{locale}/projects.json")
-              data = json.loads(path.read_text(encoding="utf-8"))
-              hierarchy = data.get("hierarchy")
-              if not isinstance(hierarchy, dict):
-                  raise SystemExit(f"missing hierarchy object for {locale}")
-              hierarchy.pop("member_count_one", None)
-              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          path = Path("packages/views/projects/components/project-detail.test.tsx")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace('  queryOptions: <T,>(options: T) => options,\n', '', 1)
+          anchor = 'vi.mock("../../workflows/project-workflow-menu", () => ({ ProjectWorkflowMenu: () => null }));\n'
+          child_mock = '\nvi.mock("./project-hierarchy-section", () => ({\n  ProjectHierarchySection: () => null,\n}));\n'
+          if child_mock.strip() not in text:
+              if anchor not in text:
+                  raise SystemExit("ProjectWorkflowMenu mock anchor not found")
+              text = text.replace(anchor, anchor + child_mock, 1)
+          path.write_text(text, encoding="utf-8")
           PY
           git diff --check
 
-      - name: Commit plural fix when needed
+      - name: Commit test isolation when needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo 'No plural fix changes to commit.'
+            echo 'No test-isolation changes to commit.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add packages/views/locales/ja/projects.json \
-                    packages/views/locales/ko/projects.json \
-                    packages/views/locales/zh-Hans/projects.json
-            git commit -m 'HIER-005: align locale plural categories'
+            git add packages/views/projects/components/project-detail.test.tsx
+            git commit -m 'HIER-005: isolate hierarchy from ProjectDetail unit tests'
             git push origin HEAD:feat/HIER-005-project-hierarchy-ui
           fi
 
