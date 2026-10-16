@@ -23,6 +23,10 @@ vi.mock("@multica/ui/lib/clipboard", () => ({
 
 vi.mock("../../workflows/project-workflow-menu", () => ({ ProjectWorkflowMenu: () => null }));
 
+vi.mock("./project-hierarchy-section", () => ({
+  ProjectHierarchySection: () => null,
+}));
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey?: readonly unknown[] }) => {
     switch (options.queryKey?.[0]) {

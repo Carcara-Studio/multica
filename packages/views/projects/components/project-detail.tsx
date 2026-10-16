@@ -27,6 +27,7 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import { currentPath, useNavigation } from "../../navigation";
 import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor";
 import { PriorityIcon } from "../../issues/components/priority-icon";
+import { ProjectHierarchySection } from "./project-hierarchy-section";
 import { ProjectResourcesSection } from "./project-resources-section";
 import { ProjectStartDatePicker } from "./project-start-date-picker";
 import { ProjectDueDatePicker } from "./project-due-date-picker";
@@ -428,6 +429,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <ProjectWorkflowPropRow project={project} />
         </div>}
       </div>
+
+      {/* Hierarchy */}
+      <ProjectHierarchySection projectId={projectId} />
 
       {/* Progress */}
       {issueMetrics.totalCount > 0 && (() => {

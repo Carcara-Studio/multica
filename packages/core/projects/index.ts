@@ -19,3 +19,22 @@ export {
   useUpdateProjectResource,
   useDeleteProjectResource,
 } from "./resource-queries";
+export {
+  projectHierarchyDescendantIds,
+  projectHierarchyLeafIds,
+  projectHierarchyMembershipById,
+  projectHierarchyToTree,
+  type ProjectHierarchyProjection,
+  type ProjectHierarchyProjectionErrorCode,
+  type ProjectHierarchyTreeNode,
+} from "./hierarchy";
+export {
+  projectHierarchyKeys,
+  projectHierarchyOptions,
+} from "./hierarchy-queries";
+export {
+  useApplyProjectHierarchyStructure,
+  useArchiveProjectHierarchyMembership,
+  useCreateProjectHierarchyMembership,
+  useReparentProjectHierarchyMembership,
+} from "./hierarchy-mutations";
