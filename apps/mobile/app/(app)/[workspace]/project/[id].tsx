@@ -4,6 +4,7 @@
  *   Header card (icon + title + description, tap → edit)
  *   Properties section (Status / Priority / Lead — tap chip → picker)
  *   Resources section (read-only by default, "Add" button → resource form)
+ *   Hierarchy section (summary + push to dedicated management screen)
  *   Related issues (Open / Done bucketed list)
  *
  * Per-record realtime: `useProjectRealtime(id, onDeleted=back)` subscribes
@@ -33,10 +34,12 @@ import { ProjectHeaderCard } from "@/components/project/project-header-card";
 import { ProjectPropertiesSection } from "@/components/project/project-properties-section";
 import { ProjectRelatedIssues } from "@/components/project/project-related-issues";
 import { ProjectResourcesSection } from "@/components/project/project-resources-section";
+import { ProjectHierarchySection } from "@/components/project/project-hierarchy-section";
 import {
   projectDetailOptions,
   projectResourcesOptions,
 } from "@/data/queries/projects";
+import { projectHierarchyKeys } from "@/data/queries/project-hierarchy";
 import { issueKeys } from "@/data/queries/issue-keys";
 import { useDeleteProject } from "@/data/mutations/projects";
 import { pinListOptions } from "@/data/queries/pins";
@@ -63,6 +66,7 @@ export default function ProjectDetail() {
     await Promise.all([
       detail.refetch(),
       qc.invalidateQueries({ queryKey: projectResourcesOptions(wsId, id).queryKey }),
+      qc.invalidateQueries({ queryKey: projectHierarchyKeys.detail(wsId, id) }),
       qc.invalidateQueries({
         queryKey: [...issueKeys.list(wsId), "byProject", id],
       }),
@@ -238,6 +242,17 @@ export default function ProjectDetail() {
               if (wsSlug)
                 router.push({
                   pathname: "/[workspace]/project/[id]/add-resource",
+                  params: { workspace: wsSlug, id },
+                });
+            }}
+          />
+          <View className="h-3" />
+          <ProjectHierarchySection
+            projectId={id}
+            onManage={() => {
+              if (wsSlug)
+                router.push({
+                  pathname: "/[workspace]/project/[id]/hierarchy",
                   params: { workspace: wsSlug, id },
                 });
             }}
