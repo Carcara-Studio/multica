@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply-and-verify-fix:
-    name: apply and verify HIER-005 CI fix
+  normalize-plurals-and-verify:
+    name: normalize locale plurals and verify views shard
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,209 +35,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Apply locale and test-mock fixes
+      - name: Remove dead singular plural keys
         shell: bash
         run: |
           python3 <<'PY'
           import json
           from pathlib import Path
 
-          translations = {
-              "fr": {
-                  "section_header": "Hiérarchie",
-                  "manage": "Gérer",
-                  "setup": "Configurer",
-                  "not_configured": "Non configurée",
-                  "empty_hint": "Définissez qui rend compte à qui dans ce projet.",
-                  "member_count_one": "{{count}} membre dans la hiérarchie",
-                  "member_count_other": "{{count}} membres dans la hiérarchie",
-                  "load_failed": "Impossible de charger la hiérarchie du projet.",
-                  "retry": "Réessayer",
-                  "refresh": "Actualiser",
-                  "invalid_state": "La hiérarchie nécessite votre attention",
-                  "open_to_refresh": "Ouvrez-la pour actualiser et inspecter l’état du serveur.",
-                  "dialog_title": "Hiérarchie du projet",
-                  "dialog_description": "Gérez les relations hiérarchiques des agents dans ce projet. L’identité structurelle est propre au projet ; les modifications sont validées par le serveur.",
-                  "empty_title": "Aucune hiérarchie",
-                  "empty_description": "Commencez avec un agent racine, puis ajoutez des subordonnés directs à n’importe quel niveau.",
-                  "add_root": "Ajouter la racine",
-                  "add_report": "Ajouter un subordonné",
-                  "choose_agent": "Choisissez un agent disponible pour ce poste dans le projet.",
-                  "no_available_agents": "Aucun autre agent actif n’est disponible.",
-                  "role_title": "Rôle dans le projet",
-                  "role_title_placeholder": "ex. Responsable backend",
-                  "role_title_hint": "Le rôle est défini à la création de cette appartenance et n’est pas modifiable dans cette version.",
-                  "root_badge": "Racine",
-                  "agent_unavailable": "Agent indisponible",
-                  "actions": "Actions de hiérarchie",
-                  "move_under": "Déplacer sous…",
-                  "choose_manager": "Choisissez le nouveau responsable direct. Les descendants sont exclus pour éviter les cycles.",
-                  "no_move_targets": "Aucun responsable valide n’est disponible.",
-                  "make_root": "Définir comme racine",
-                  "archive": "Archiver",
-                  "cancel": "Annuler",
-                  "save": "Enregistrer",
-                  "write_failed": "La modification de la hiérarchie n’a pas pu être confirmée. Le dernier état du serveur a été rechargé.",
-                  "stale_state": "Ce projet ou ce membre de la hiérarchie n’existe plus. La hiérarchie a été actualisée."
-              },
-              "ja": {
-                  "section_header": "階層",
-                  "manage": "管理",
-                  "setup": "設定",
-                  "not_configured": "未設定",
-                  "empty_hint": "このプロジェクト内の指揮系統を定義します。",
-                  "member_count_one": "階層メンバー {{count}} 件",
-                  "member_count_other": "階層メンバー {{count}} 件",
-                  "load_failed": "プロジェクト階層を読み込めませんでした。",
-                  "retry": "再試行",
-                  "refresh": "更新",
-                  "invalid_state": "階層の確認が必要です",
-                  "open_to_refresh": "開いて更新し、サーバーの最新状態を確認してください。",
-                  "dialog_title": "プロジェクト階層",
-                  "dialog_description": "このプロジェクト内のエージェントの直属関係を管理します。構造上の所属はプロジェクト単位で、変更はサーバーで検証されます。",
-                  "empty_title": "階層はまだありません",
-                  "empty_description": "1 つのルートエージェントから始め、任意の深さで直属のメンバーを追加します。",
-                  "add_root": "ルートを追加",
-                  "add_report": "直属メンバーを追加",
-                  "choose_agent": "このプロジェクトのポジションに割り当てる利用可能なエージェントを選択します。",
-                  "no_available_agents": "追加できるアクティブなエージェントはありません。",
-                  "role_title": "プロジェクト内の役割",
-                  "role_title_placeholder": "例: バックエンドリード",
-                  "role_title_hint": "役割はこの所属を作成するときに設定され、このバージョンでは編集できません。",
-                  "root_badge": "ルート",
-                  "agent_unavailable": "エージェントを利用できません",
-                  "actions": "階層の操作",
-                  "move_under": "配下へ移動…",
-                  "choose_manager": "新しい直属マネージャーを選択します。循環を防ぐため子孫は除外されます。",
-                  "no_move_targets": "有効な移動先マネージャーがありません。",
-                  "make_root": "ルートにする",
-                  "archive": "アーカイブ",
-                  "cancel": "キャンセル",
-                  "save": "保存",
-                  "write_failed": "階層の変更を確認できませんでした。サーバーの最新状態を再読み込みしました。",
-                  "stale_state": "このプロジェクトまたは階層メンバーは存在しません。階層を更新しました。"
-              },
-              "ko": {
-                  "section_header": "계층",
-                  "manage": "관리",
-                  "setup": "설정",
-                  "not_configured": "설정되지 않음",
-                  "empty_hint": "이 프로젝트에서 누가 누구에게 보고하는지 정의합니다.",
-                  "member_count_one": "계층 멤버 {{count}}명",
-                  "member_count_other": "계층 멤버 {{count}}명",
-                  "load_failed": "프로젝트 계층을 불러오지 못했습니다.",
-                  "retry": "다시 시도",
-                  "refresh": "새로고침",
-                  "invalid_state": "계층을 확인해야 합니다",
-                  "open_to_refresh": "열어서 새로고침하고 서버의 최신 상태를 확인하세요.",
-                  "dialog_title": "프로젝트 계층",
-                  "dialog_description": "이 프로젝트에서 에이전트의 직접 보고 관계를 관리합니다. 구조적 소속은 프로젝트 범위이며 변경 사항은 서버에서 검증됩니다.",
-                  "empty_title": "아직 계층이 없습니다",
-                  "empty_description": "루트 에이전트 하나로 시작한 뒤 원하는 깊이까지 직속 보고자를 추가하세요.",
-                  "add_root": "루트 추가",
-                  "add_report": "직속 보고자 추가",
-                  "choose_agent": "이 프로젝트 역할에 배치할 수 있는 에이전트를 선택하세요.",
-                  "no_available_agents": "추가할 수 있는 활성 에이전트가 없습니다.",
-                  "role_title": "프로젝트 역할",
-                  "role_title_placeholder": "예: 백엔드 리드",
-                  "role_title_hint": "역할은 이 소속을 만들 때 설정되며 이 버전에서는 수정할 수 없습니다.",
-                  "root_badge": "루트",
-                  "agent_unavailable": "에이전트를 사용할 수 없음",
-                  "actions": "계층 작업",
-                  "move_under": "다음 아래로 이동…",
-                  "choose_manager": "새 직속 관리자를 선택하세요. 순환을 방지하기 위해 하위 멤버는 제외됩니다.",
-                  "no_move_targets": "선택할 수 있는 유효한 관리자가 없습니다.",
-                  "make_root": "루트로 지정",
-                  "archive": "보관",
-                  "cancel": "취소",
-                  "save": "저장",
-                  "write_failed": "계층 변경을 확인하지 못했습니다. 서버의 최신 상태를 다시 불러왔습니다.",
-                  "stale_state": "이 프로젝트 또는 계층 멤버가 더 이상 존재하지 않습니다. 계층을 새로고침했습니다."
-              },
-              "zh-Hans": {
-                  "section_header": "层级",
-                  "manage": "管理",
-                  "setup": "设置",
-                  "not_configured": "未配置",
-                  "empty_hint": "定义此项目中智能体之间的汇报关系。",
-                  "member_count_one": "{{count}} 个层级成员",
-                  "member_count_other": "{{count}} 个层级成员",
-                  "load_failed": "无法加载项目层级。",
-                  "retry": "重试",
-                  "refresh": "刷新",
-                  "invalid_state": "层级需要处理",
-                  "open_to_refresh": "打开后刷新并检查服务器的最新状态。",
-                  "dialog_title": "项目层级",
-                  "dialog_description": "管理此项目中智能体的直接汇报关系。结构身份限定在项目范围内，所有变更均由服务器验证。",
-                  "empty_title": "尚未配置层级",
-                  "empty_description": "先添加一个根智能体，再按任意深度添加直属成员。",
-                  "add_root": "添加根成员",
-                  "add_report": "添加直属成员",
-                  "choose_agent": "选择一个可用于此项目职位的智能体。",
-                  "no_available_agents": "没有其他可用的活跃智能体。",
-                  "role_title": "项目角色",
-                  "role_title_placeholder": "例如：后端负责人",
-                  "role_title_hint": "角色在创建此项目成员关系时设置，此版本暂不支持修改。",
-                  "root_badge": "根成员",
-                  "agent_unavailable": "智能体不可用",
-                  "actions": "层级操作",
-                  "move_under": "移动到…下",
-                  "choose_manager": "选择新的直属负责人。为防止循环关系，后代成员不可选择。",
-                  "no_move_targets": "没有可用的负责人目标。",
-                  "make_root": "设为根成员",
-                  "archive": "归档",
-                  "cancel": "取消",
-                  "save": "保存",
-                  "write_failed": "无法确认层级变更，已重新加载服务器的最新状态。",
-                  "stale_state": "此项目或层级成员已不存在，层级已刷新。"
-              }
-          }
-
-          for locale, hierarchy in translations.items():
+          for locale in ("ja", "ko", "zh-Hans"):
               path = Path(f"packages/views/locales/{locale}/projects.json")
               data = json.loads(path.read_text(encoding="utf-8"))
-              data["hierarchy"] = hierarchy
-              # Keep the new hierarchy beside resources, matching the EN namespace layout.
-              ordered = {}
-              for key, value in data.items():
-                  if key == "hierarchy":
-                      continue
-                  ordered[key] = value
-                  if key == "resources":
-                      ordered["hierarchy"] = hierarchy
-              if "hierarchy" not in ordered:
-                  ordered["hierarchy"] = hierarchy
-              path.write_text(json.dumps(ordered, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-          test_path = Path("packages/views/projects/components/project-detail.test.tsx")
-          text = test_path.read_text(encoding="utf-8")
-          marker = 'vi.mock("@tanstack/react-query", () => ({\n  useQuery:'
-          replacement = 'vi.mock("@tanstack/react-query", () => ({\n  queryOptions: <T,>(options: T) => options,\n  useQuery:'
-          if replacement not in text:
-              if marker not in text:
-                  raise SystemExit("React Query mock marker not found")
-              text = text.replace(marker, replacement, 1)
-              test_path.write_text(text, encoding="utf-8")
+              hierarchy = data.get("hierarchy")
+              if not isinstance(hierarchy, dict):
+                  raise SystemExit(f"missing hierarchy object for {locale}")
+              hierarchy.pop("member_count_one", None)
+              path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
-
           git diff --check
 
-      - name: Commit fix when needed
+      - name: Commit plural fix when needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo 'No fix changes to commit.'
-            exit 0
+            echo 'No plural fix changes to commit.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add packages/views/locales/ja/projects.json \
+                    packages/views/locales/ko/projects.json \
+                    packages/views/locales/zh-Hans/projects.json
+            git commit -m 'HIER-005: align locale plural categories'
+            git push origin HEAD:feat/HIER-005-project-hierarchy-ui
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add packages/views/locales/fr/projects.json \
-                  packages/views/locales/ja/projects.json \
-                  packages/views/locales/ko/projects.json \
-                  packages/views/locales/zh-Hans/projects.json \
-                  packages/views/projects/components/project-detail.test.tsx
-          git commit -m 'HIER-005: fix views shard regressions'
-          git push origin HEAD:feat/HIER-005-project-hierarchy-ui
 
       - name: Verify locale parity
         run: pnpm --filter='@multica/views' exec vitest run locales/parity.test.ts
