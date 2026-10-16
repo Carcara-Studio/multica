@@ -60,12 +60,15 @@ When superseding an ADR, the new ADR must link to the old one and the old ADR mu
 | [ADR-012](ADR-012-no-blind-retry-after-ambiguous-partial-execution.md) | No blind retry after ambiguous partial execution | Accepted |
 | [ADR-013](ADR-013-cross-provider-compatibility-policy.md) | Cross-provider compatibility policy | Accepted |
 | [ADR-014](ADR-014-upstream-compatibility-strategy.md) | Upstream compatibility strategy | Accepted |
+| [ADR-015](ADR-015-fork-migration-namespace.md) | Reserved migration namespace for fork-owned schema changes | Accepted |
 
 ADR-001 through ADR-006 were accepted by the human maintainer on 2026-10-14 and are implementation authority for Project Hierarchy work unless superseded or narrowed by a later accepted ADR.
 
 ADR-007 through ADR-013 were accepted by the human maintainer on 2026-10-14 and are implementation authority for primary/fallback failover work unless superseded or narrowed by a later accepted ADR.
 
 ADR-014 was accepted by the human maintainer on 2026-10-14 and is implementation authority for adapting fork mechanisms to current upstream repository rules. It takes precedence over FK/cascade-specific implementation proposals in earlier ADRs while preserving their accepted domain invariants.
+
+ADR-015 was accepted on 2026-10-16 during MFK-010 and is implementation authority for allocating and renumbering fork-owned database migrations. Fork migrations use the reserved `900000+` band unless this ADR is explicitly amended.
 
 ## Required Structure
 
@@ -181,6 +184,7 @@ ADR-013 — Cross-provider compatibility policy
 
 ```text
 ADR-014 — Upstream compatibility strategy
+ADR-015 — Reserved migration namespace for fork-owned schema changes
 ```
 
-The numbering above is reserved for the initial architecture set. If investigation materially changes grouping before acceptance, document the change rather than silently reusing an accepted ADR number.
+The numbering above records the accepted architecture set. Future ADR numbers must remain append-only; do not renumber accepted decisions.
