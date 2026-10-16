@@ -47,8 +47,17 @@ WHERE id = $1
 RETURNING *;
 
 -- name: DeleteProject :exec
--- Defense-in-depth: workspace_id is a SQL-layer tenant guard. See DeleteIssue.
-DELETE FROM project WHERE id = $1 AND workspace_id = $2;
+-- Defense-in-depth: workspace_id is a SQL-layer tenant guard. Hierarchy
+-- memberships are application-owned (no FK/cascade), so delete them in the
+-- same locked transaction before removing the Project row.
+WITH deleted_hierarchy_memberships AS (
+    DELETE FROM project_agent_membership AS pam
+    WHERE pam.project_id = sqlc.arg('id')::uuid
+      AND pam.workspace_id = sqlc.arg('workspace_id')::uuid
+)
+DELETE FROM project AS p
+WHERE p.id = sqlc.arg('id')::uuid
+  AND p.workspace_id = sqlc.arg('workspace_id')::uuid;
 
 -- name: CountIssuesByProject :one
 SELECT count(*) FROM issue

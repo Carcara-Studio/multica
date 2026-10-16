@@ -21,13 +21,13 @@ func TestProjectHierarchyMigrationsUpDownUpInIsolatedSchema(t *testing.T) {
 	pool := openTestPoolWithSearchPath(t, schema)
 
 	baseVersions := []string{
-		"573_project_agent_membership",
-		"574_project_agent_membership_id_idx",
-		"575_project_agent_membership_project_agent_idx",
-		"576_project_agent_membership_active_root_idx",
-		"577_project_agent_membership_manager_idx",
-		"578_project_agent_membership_workspace_idx",
-		"579_project_agent_membership_primary_key",
+		"900000_project_agent_membership",
+		"900001_project_agent_membership_id_idx",
+		"900002_project_agent_membership_project_agent_idx",
+		"900003_project_agent_membership_active_root_idx",
+		"900004_project_agent_membership_manager_idx",
+		"900005_project_agent_membership_workspace_idx",
+		"900006_project_agent_membership_primary_key",
 	}
 
 	for _, direction := range []string{"up", "down", "up"} {
