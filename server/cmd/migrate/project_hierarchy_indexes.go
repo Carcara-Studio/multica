@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,13 +42,12 @@ FROM pg_constraint AS c
 WHERE c.conrelid = to_regclass('project_agent_membership')
   AND c.contype = 'p'
 `).Scan(&name, &definition)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No table or no primary key yet. In both cases the migration should
+		// apply normally; to_regclass(NULL) simply matches no constraint row.
+		return true, "", nil
+	}
 	if err != nil {
-		// No table or no primary key yet: the migration should apply normally.
-		// QueryRow returns no rows in both cases because to_regclass(NULL) does
-		// not match any constraint.
-		if err.Error() == "no rows in result set" {
-			return true, "", nil
-		}
 		return false, "", fmt.Errorf("inspect project hierarchy primary key: %w", err)
 	}
 	if name != "project_agent_membership_pkey" || definition != "PRIMARY KEY (id)" {
