@@ -1,0 +1,55 @@
+name: HIER-005 Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/HIER-005-project-hierarchy-ui
+  workflow_dispatch:
+
+concurrency:
+  group: hier-005-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hierarchy-component-tests:
+    name: hierarchy component - ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: full-file
+            pattern: ""
+          - group: empty-and-depth
+            pattern: "shows the empty summary|renders arbitrary depth"
+          - group: create-and-add
+            pattern: "creates the first root|adds a direct report"
+          - group: reparent-and-root
+            pattern: "reparents a non-root|promotes a new root"
+          - group: archive-and-conflict
+            pattern: "offers Archive|shows a 409 conflict"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run targeted hierarchy tests
+        env:
+          TEST_PATTERN: ${{ matrix.pattern }}
+        run: |
+          if [ -n "$TEST_PATTERN" ]; then
+            pnpm --filter='@multica/views' exec vitest run projects/components/project-hierarchy-section.test.tsx --reporter=verbose -t "$TEST_PATTERN"
+          else
+            pnpm --filter='@multica/views' exec vitest run projects/components/project-hierarchy-section.test.tsx --reporter=verbose
+          fi
