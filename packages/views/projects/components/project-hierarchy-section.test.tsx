@@ -5,12 +5,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@multica/core/api";
+import type {
+  ProjectHierarchyMembership,
+  ProjectHierarchyResponse,
+} from "@multica/core/types/project-hierarchy";
 import { renderWithI18n } from "../../test/i18n";
 import { ProjectHierarchySection } from "./project-hierarchy-section";
 
+type AgentSummary = {
+  id: string;
+  name: string;
+  archived_at: string | null;
+};
+
 const mocks = vi.hoisted(() => ({
-  hierarchy: { memberships: [], total: 0 } as any,
-  agents: [] as any[],
+  hierarchy: { memberships: [], total: 0 } as ProjectHierarchyResponse,
+  agents: [] as AgentSummary[],
   refetch: vi.fn(),
   createMembership: { mutate: vi.fn(), isPending: false },
   reparentMembership: { mutate: vi.fn(), isPending: false },
@@ -89,7 +99,9 @@ vi.mock("@multica/ui/components/ui/dropdown-menu", () => ({
 }));
 
 vi.mock("../../common/actor-avatar", () => ({
-  ActorAvatar: ({ actorId }: { actorId: string }) => <span data-testid={`avatar-${actorId}`} />,
+  ActorAvatar: ({ actorId }: { actorId: string }) => (
+    <span data-testid={`avatar-${actorId}`} />
+  ),
 }));
 
 const timestamp = "2026-10-16T00:00:00Z";
@@ -99,7 +111,7 @@ function member(
   agentId: string,
   managerMembershipId: string | null,
   title: string,
-) {
+): ProjectHierarchyMembership {
   return {
     id,
     agent_id: agentId,
@@ -110,7 +122,7 @@ function member(
   };
 }
 
-function setHierarchy(memberships: ReturnType<typeof member>[]) {
+function setHierarchy(memberships: ProjectHierarchyMembership[]) {
   mocks.hierarchy = { memberships, total: memberships.length };
 }
 
@@ -121,7 +133,13 @@ function openHierarchy() {
 
 function installMutationBehavior(mutation: { mutate: ReturnType<typeof vi.fn> }) {
   mutation.mutate.mockImplementation(
-    (_payload: unknown, options?: { onError?: (error: unknown) => void; onSuccess?: () => void }) => {
+    (
+      _payload: unknown,
+      options?: {
+        onError?: (error: unknown) => void;
+        onSuccess?: () => void;
+      },
+    ) => {
       if (mocks.mutationError) options?.onError?.(mocks.mutationError);
       else options?.onSuccess?.();
     },
@@ -169,7 +187,7 @@ describe("ProjectHierarchySection", () => {
     openHierarchy();
 
     expect(screen.getByText("3 hierarchy members")).toBeTruthy();
-    expect(screen.getByText("Project Lead")).toBeTruthy();
+    expect(screen.getAllByText("Project Lead")).toHaveLength(2);
     expect(screen.getByText("Backend Lead")).toBeTruthy();
     expect(screen.getByText("Backend Engineer")).toBeTruthy();
     expect(screen.getByText("Agent unavailable")).toBeTruthy();
