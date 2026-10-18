@@ -6,6 +6,7 @@
 - Related issues: #7
 - Supersedes: None
 - Superseded by: None
+- Implementation refinement: [ADR-016](./ADR-016-reliable-quota-evidence.md) requires affirmative billing evidence in addition to the canonical label, because implementation-time inspection found broad quota-word matches.
 
 ## Context
 

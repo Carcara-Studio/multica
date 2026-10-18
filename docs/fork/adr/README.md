@@ -178,6 +178,7 @@ ADR-010 — 30-minute primary recovery probe
 ADR-011 — Failover concurrency and probe leases
 ADR-012 — No blind retry after ambiguous partial execution
 ADR-013 — Cross-provider compatibility policy
+ADR-016 — Require affirmative billing evidence for automatic failover
 ```
 
 ### Governance
