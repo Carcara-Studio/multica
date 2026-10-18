@@ -98,7 +98,10 @@ compose this with upstream transactions and test its complete lock graph before
 being enabled. In particular, archive must suspend state atomically and terminal
 deletion must clean it explicitly; the MVCC Agent eligibility read alone is not
 a proof against a concurrent archive/rebind. These lifecycle hooks are not wired
-in this increment.
+in this increment, except for explicit workspace-deletion cleanup. The new table
+is classified as workspace-owned in the existing teardown manifest and removed
+by the existing `DeleteWorkspace` CTE in the same transaction as its owner. A
+handler regression checks rollback and preservation of a neighbouring workspace.
 
 Activation is a low-level necessary check, **not authorization to fail over**.
 The future transition service must additionally prove ADR-016 reliable evidence,
@@ -144,9 +147,10 @@ state must never be used as an automatic recovery mechanism.
 
 ## Upstream impact and remaining work
 
-Only new migrations, an isolated query file, generated DB code, migration hooks,
-tests and fork docs are changed. No Agent/task schema or upstream runtime hotspot
-is modified. Keep future config, route persistence, lifecycle cleanup, complete
+New migrations, an isolated query file, generated DB code, migration hooks,
+tests and fork docs are accompanied by a small addition to the already fork-touched
+workspace teardown CTE and manifest. No Agent/task schema or runtime hotspot is
+modified. Keep future config, route persistence, Agent/runtime lifecycle cleanup, complete
 lock-order tests, safe adapters, heartbeat protocol and user-facing configuration
 in separate reviewed increments. This ADR closes this persistence boundary; it
 does not declare the complete FAIL-001 integration design or feature finished.
