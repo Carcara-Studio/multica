@@ -31,10 +31,16 @@ fork-local evidence gate under `server/internal/failover`. Activation requires:
 4. no explicit transient rate/capacity witness.
 
 Initial affirmative witnesses are `insufficient_balance`, `insufficient_quota`,
-insufficient balance, low balance, monthly usage limit, exhausted credits,
+insufficient balance, low balance, explicit hourly/daily/weekly/monthly usage limit,
+zero remaining credits, exhausted credits,
 out of credits, depleted/exhausted credit balance, and payment required.
 The canonical classifier must accept the diagnostic too: a phrase not recognized
 by it remains rejected even if it resembles a billing witness.
+
+The hourly subscription-window and zero-credit cases reuse diagnostic fixtures
+already present in upstream `server/pkg/taskfailure/classify_test.go`, including
+HTTP 403 usage-limit responses with an access-token prefix. A generic auth error
+still fails the upstream classifier guard.
 
 Generic quota/credits words, a bare HTTP number, and unknown provider wording
 remain inconclusive. Mixed rate/billing diagnostics are conservatively rejected.

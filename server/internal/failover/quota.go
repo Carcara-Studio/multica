@@ -10,7 +10,7 @@ import (
 
 // The history classifier intentionally accepts broad words such as "quota".
 // Automatic routing needs affirmative billing evidence, not just that label.
-var billingExhaustion = regexp.MustCompile(`\b(insufficient[_ ]balance|insufficient_quota|balance is too low|monthly usage limit|credits (are )?exhausted|out of credits|credit balance (is )?(exhausted|depleted)|payment required)\b`)
+var billingExhaustion = regexp.MustCompile(`\b(insufficient[_ ]balance|insufficient_quota|balance is too low|([0-9]+-hour|daily|weekly|monthly) usage limit|0 credits remaining|credits (are )?exhausted|out of credits|credit balance (is )?(exhausted|depleted)|payment required)\b`)
 
 var transientQuota = regexp.MustCompile(`\b(429|529|rate[_ -]?limits?|too many requests|requests per (minute|second)|tokens per (minute|second)|per[- ]minute|per[- ]second|capacity|overloaded)\b`)
 
