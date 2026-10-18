@@ -1,0 +1,1 @@
+ALTER TABLE agent_failover_state ADD CONSTRAINT agent_failover_state_pkey PRIMARY KEY USING INDEX agent_failover_state_agent_idx;

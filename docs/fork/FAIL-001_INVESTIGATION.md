@@ -2,6 +2,15 @@
 
 Issue: #37. Snapshot: 2026-10-18.
 
+## Persistence increment
+
+After PR #38 (`8cbf332a7`), the next isolated increment implements the durable
+state/lease boundary in [ADR-017](./adr/ADR-017-failover-state-persistence-boundary.md).
+It allocates migrations `900007–900012` and adds transaction-bound sqlc primitives.
+It does not enable configuration, automatic routing, inference probes or lifecycle
+hooks. The remaining integration gates below still apply. Earlier migration-head
+and SHA observations below describe the original investigation snapshot.
+
 ## Baselines and corrected handoff
 
 - Fork main: `3aec44a5ce2cfd036be5d97cfc11d5c68b537c78`.
