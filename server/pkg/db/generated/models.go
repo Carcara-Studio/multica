@@ -63,6 +63,27 @@ type AgentBuilderDraft struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AgentFailoverState struct {
+	AgentID              pgtype.UUID        `json:"agent_id"`
+	WorkspaceID          pgtype.UUID        `json:"workspace_id"`
+	PrimaryGeneration    pgtype.UUID        `json:"primary_generation"`
+	State                string             `json:"state"`
+	Version              int64              `json:"version"`
+	PrimaryFailedAt      pgtype.Timestamptz `json:"primary_failed_at"`
+	PrimaryFailureTaskID pgtype.UUID        `json:"primary_failure_task_id"`
+	NextProbeAt          pgtype.Timestamptz `json:"next_probe_at"`
+	LastProbeAt          pgtype.Timestamptz `json:"last_probe_at"`
+	LastProbeReason      pgtype.Text        `json:"last_probe_reason"`
+	RecoveredAt          pgtype.Timestamptz `json:"recovered_at"`
+	ProbeToken           pgtype.UUID        `json:"probe_token"`
+	ProbeRuntimeID       pgtype.UUID        `json:"probe_runtime_id"`
+	ProbeLeaseUntil      pgtype.Timestamptz `json:"probe_lease_until"`
+	ProbeDispatchedAt    pgtype.Timestamptz `json:"probe_dispatched_at"`
+	SuspendedAt          pgtype.Timestamptz `json:"suspended_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Allow-list of who may invoke a public_to agent (MUL-3963). One row per (agent, target_type, target); targets stack and canInvokeAgent OR-matches. workspace rows store the agent workspace_id in target_id; member rows store the user id; team rows are reserved and inert in V1. Rows only matter when agent.permission_mode = public_to. No DB foreign keys: agent_id / created_by / member target_id relationships are maintained in the application layer (see migration comment).
 type AgentInvocationTarget struct {
 	ID         pgtype.UUID        `json:"id"`
