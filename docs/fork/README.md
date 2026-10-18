@@ -10,6 +10,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`GOVERNANCE.md`](./GOVERNANCE.md) — repository governance, protected-branch workflow, and implementation-agent rules.
 - [`UPSTREAM_SYNC.md`](./UPSTREAM_SYNC.md) — policy for continuously incorporating upstream changes while preserving Git ancestry.
 - [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
+- [`FAIL-001_INVESTIGATION.md`](./FAIL-001_INVESTIGATION.md) — current failover call-site inventory, evidence corrections and unclosed integration gates.
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
 ## Authority
