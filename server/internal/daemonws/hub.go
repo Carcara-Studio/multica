@@ -24,6 +24,9 @@ const (
 type ClientIdentity struct {
 	DaemonID string
 	UserID   string
+	// HumanActor is set only by server authentication classification. Machine
+	// credentials may also carry UserID and must not inherit owner privileges.
+	HumanActor bool
 	// WorkspaceID is the legacy single-workspace scope used by older callers
 	// and daemon-token auth. New code should populate WorkspaceIDs from the
 	// runtime rows authorized for this connection.

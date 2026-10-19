@@ -113,7 +113,7 @@ func exchangeSocket(t *testing.T, identity daemonws.ClientIdentity) (*daemonws.H
 }
 
 func exchangeIdentity(f *stateFixture, runtime string) daemonws.ClientIdentity {
-	return daemonws.ClientIdentity{UserID: f.fx.UserID, WorkspaceID: f.fx.WorkspaceID, RuntimeIDs: []string{runtime}}
+	return daemonws.ClientIdentity{UserID: f.fx.UserID, HumanActor: true, WorkspaceID: f.fx.WorkspaceID, RuntimeIDs: []string{runtime}}
 }
 
 func issueExchange(e EvidenceExchange, s EvidenceSelection) exchangeOperation {
@@ -203,7 +203,7 @@ func TestEvidenceExchangeSupportsFallbackAndSeparatePrimaryProbeSelection(t *tes
 }
 
 func TestEvidenceExchangeCurrentMembershipAndOwnerPolicy(t *testing.T) {
-	for _, kind := range []string{"member denied", "membership removed", "admin allowed", "daemon denied"} {
+	for _, kind := range []string{"member denied", "membership removed", "admin allowed", "daemon denied", "machine owner denied"} {
 		t.Run(kind, func(t *testing.T) {
 			f, e, s, _ := exchangeFixture(t)
 			identity := exchangeIdentity(f, uuidString(s.RuntimeID))
@@ -218,6 +218,9 @@ func TestEvidenceExchangeCurrentMembershipAndOwnerPolicy(t *testing.T) {
 			}
 			if kind == "daemon denied" {
 				identity.DaemonID = "daemon-token"
+			}
+			if kind == "machine owner denied" {
+				identity.HumanActor = false
 			}
 			_, run := exchangeSocket(t, identity)
 			if kind == "membership removed" {

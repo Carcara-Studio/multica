@@ -14,6 +14,7 @@ type rpcConnectionKey struct{}
 type RPCConnectionIdentity struct {
 	ConnectionID     uuid.UUID
 	DaemonID, UserID string
+	HumanActor       bool
 }
 
 // RuntimeConnectionScope additionally binds the connection-time workspace
@@ -50,5 +51,5 @@ func runtimeConnectionScope(ctx context.Context, runtimeID, workspaceID string) 
 	if !c.hub.clients[c] || !c.hub.byRuntime[runtimeID][c] || !c.allowsRuntime(runtimeID) || (workspaceID != "" && !slices.Contains(c.identity.AuthorizedWorkspaceIDs(), workspaceID)) || ctx.Err() != nil || c.ctx.Err() != nil {
 		return RPCConnectionIdentity{}, false
 	}
-	return RPCConnectionIdentity{ConnectionID: c.connectionID, DaemonID: c.identity.DaemonID, UserID: c.identity.UserID}, true
+	return RPCConnectionIdentity{ConnectionID: c.connectionID, DaemonID: c.identity.DaemonID, UserID: c.identity.UserID, HumanActor: c.identity.HumanActor}, true
 }

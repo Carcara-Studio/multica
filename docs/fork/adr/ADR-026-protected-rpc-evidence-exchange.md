@@ -21,13 +21,17 @@ derived independently of reports. `RuntimeConnectionScope` returns immutable sca
 identity from the real hub RPC context, only for a live attached runtime and the
 connection's authorized workspace scope. A serialized/copied identity or request
 body cannot manufacture that context or broaden its runtime/workspace scope.
+The identity also carries a server-classified human-actor bit: only authoritative
+DaemonAuth PAT/JWT provenance without a machine-actor stamp sets it. UserID alone
+is insufficient because cloud/machine credentials can carry their owner's ID.
 
 This boundary deliberately supports protected management preflight through human
 PAT/JWT connections. It parses the authenticated user UUID and reuses
 `ConfigManager.begin`: workspace owner fence, current membership/Agent owner/admin
 policy, Agent lock and sorted primary/requested runtime SHARE NOWAIT locks. There
 is no runtime-owner impersonation for daemon tokens; those are rejected even when
-a user field is present. A worker/delegated execution authorization protocol is
+a user field is present. Missing authentication provenance also fails closed for
+this boundary. A worker/delegated execution authorization protocol is
 separate future work, not an exception to protected configuration authority.
 
 Under these locks, reload optional config/state and the selected runtime, reject
@@ -76,7 +80,8 @@ New scope tests reject body-supplied user/workspace and removed runtime scope.
 PostgreSQL tests compose actual hub-created RPC contexts with protected owner
 transactions and the durable ledger: commit-before-output, replay rejection,
 default/no-context/foreign scope denial, current membership/owner/admin policy,
-daemon-token denial, both targets and separate primary probe purpose, late epoch
-change/runtime detachment rollback, commit failure rollback, invalid-report burn
+daemon-token and machine-owner denial, both targets and separate primary probe
+purpose, late epoch change/runtime detachment rollback, commit failure rollback,
+JWT/PAT middleware classification regressions, invalid-report burn
 and archived Agent rejection. No installed agent CLI, account or real inference
 is accessed. Existing handler/service/server suites retain production behavior.

@@ -7,9 +7,74 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-redis/redismock/v9"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/multica-ai/multica/server/internal/auth"
+	"github.com/multica-ai/multica/server/internal/middleware"
 	"github.com/multica-ai/multica/server/internal/testutil"
 )
+
+func TestDaemonWebSocketHumanClassificationUsesAuthenticationProvenance(t *testing.T) {
+	for _, kind := range []string{"jwt", "pat"} {
+		t.Run(kind, func(t *testing.T) {
+			userID := uuid.NewString()
+			var cache *auth.PATCache
+			var token string
+			if kind == "jwt" {
+				var err error
+				token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "exp": time.Now().Add(time.Minute).Unix()}).SignedString(auth.JWTSecret())
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				token = "mul_ws_identity_fixture"
+				client, mock := redismock.NewClientMock()
+				t.Cleanup(func() { _ = client.Close() })
+				mock.ExpectGet("mul:auth:pat:" + auth.HashToken(token)).SetVal(userID)
+				cache = auth.NewPATCache(client)
+				t.Cleanup(func() {
+					if err := mock.ExpectationsWereMet(); err != nil {
+						t.Error(err)
+					}
+				})
+			}
+			called := false
+			endpoint := middleware.DaemonAuth(nil, cache, nil, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				identity, ok := (&Handler{}).buildDaemonWebSocketIdentity(w, r, nil, requestUserID(r))
+				if !ok || !identity.HumanActor || identity.UserID != userID {
+					t.Error("authenticated human provenance was lost")
+				}
+				// A server-stamped machine actor must remain a machine even
+				// when the token carries a valid human owner's user ID.
+				r.Header.Set("X-Actor-Source", "cloud_pat")
+				identity, ok = (&Handler{}).buildDaemonWebSocketIdentity(w, r, nil, requestUserID(r))
+				if !ok || identity.HumanActor {
+					t.Error("machine actor inherited owner management authority")
+				}
+			}))
+			req := httptest.NewRequest(http.MethodGet, "/api/daemon/ws", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("X-Human-Actor", "true")
+			w := httptest.NewRecorder()
+			endpoint.ServeHTTP(w, req)
+			if !called {
+				t.Fatal("authentication did not reach identity builder", w.Code)
+			}
+		})
+	}
+	for _, daemon := range []bool{false, true} {
+		req := httptest.NewRequest(http.MethodGet, "/api/daemon/ws", nil)
+		req.Header.Set("X-Human-Actor", "true")
+		if daemon {
+			req = req.WithContext(middleware.WithDaemonContext(req.Context(), uuid.NewString(), "daemon-token"))
+		}
+		if daemonWebSocketHumanActor(req) {
+			t.Fatal("missing/daemon auth provenance gained human authority")
+		}
+	}
+}
 
 func TestDaemonWebSocketMissingHubIsInternalError(t *testing.T) {
 	h := &Handler{}

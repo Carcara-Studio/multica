@@ -60,7 +60,7 @@ func (e EvidenceExchange) begin(ctx context.Context, s EvidenceSelection) (*evid
 	scope, ok := daemonws.RuntimeConnectionScope(ctx, uuid.UUID(s.RuntimeID.Bytes).String(), uuid.UUID(s.WorkspaceID.Bytes).String())
 	// This management preflight boundary deliberately supports human PAT/JWT
 	// connections only. A daemon token cannot impersonate its runtime owner.
-	if !ok || scope.DaemonID != "" || e.observer == nil {
+	if !ok || !scope.HumanActor || scope.DaemonID != "" || e.observer == nil {
 		return nil, ErrExecutionEvidence
 	}
 	userID, err := util.ParseUUID(scope.UserID)
