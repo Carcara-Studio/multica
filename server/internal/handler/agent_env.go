@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
@@ -202,15 +203,6 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 		req.CustomEnv = map[string]string{}
 	}
 
-	existing := unmarshalCustomEnv(agent)
-	merged, audit := mergeAgentEnv(existing, req.CustomEnv)
-
-	envBytes, err := json.Marshal(merged)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to encode env")
-		return
-	}
-
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		slog.Error("agent_env update: begin tx failed",
@@ -220,6 +212,20 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	qtx := h.Queries.WithTx(tx)
+
+	locked, err := qtx.GetAgentForUpdate(r.Context(), agent.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock agent")
+		return
+	}
+	existing := unmarshalCustomEnv(locked)
+	merged, audit := mergeAgentEnv(existing, req.CustomEnv)
+
+	envBytes, err := json.Marshal(merged)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to encode env")
+		return
+	}
 
 	updated, err := qtx.UpdateAgentCustomEnv(r.Context(), db.UpdateAgentCustomEnvParams{
 		ID:        agent.ID,
@@ -234,7 +240,7 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 
 	auditDetails := map[string]any{
 		"agent_id":       uuidToString(agent.ID),
-		"agent_name":     agent.Name,
+		"agent_name":     locked.Name,
 		"added_keys":     audit.added,
 		"removed_keys":   audit.removed,
 		"changed_keys":   audit.changed,
@@ -253,6 +259,11 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 		slog.Error("agent_env_updated audit write failed; rolling back update",
 			append(logger.RequestAttrs(r), "error", err, "agent_id", uuidToString(agent.ID))...)
 		writeError(w, http.StatusInternalServerError, "audit log write failed; env update rolled back")
+		return
+	}
+
+	if err := failover.InvalidateAgentChange(r.Context(), qtx, locked, updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
 		return
 	}
 

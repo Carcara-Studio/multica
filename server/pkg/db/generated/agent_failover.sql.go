@@ -358,14 +358,19 @@ func (q *Queries) MarkAgentPrimaryProbeDispatched(ctx context.Context, arg MarkA
 }
 
 const rotateAgentFailoverGeneration = `-- name: RotateAgentFailoverGeneration :one
+WITH locked AS (
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s
+    WHERE s.agent_id = $2 AND s.workspace_id = $3
+      AND s.primary_generation = $4 AND s.primary_generation <> $1
+    FOR UPDATE
+), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM locked)
 UPDATE agent_failover_state f
-SET primary_generation = $1, version = version + 1,
-    state = CASE WHEN state = 'primary_probing' THEN 'fallback_active' ELSE state END,
-    next_probe_at = CASE WHEN state <> 'primary_active' THEN clock_timestamp() + interval '30 minutes' ELSE NULL END,
+SET primary_generation = $1, version = f.version + 1,
+    state = CASE WHEN f.state = 'primary_probing' THEN 'fallback_active' ELSE f.state END,
+    next_probe_at = CASE WHEN f.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
-    updated_at = clock_timestamp()
-WHERE f.agent_id = $2 AND f.workspace_id = $3
-  AND f.primary_generation = $4 AND f.primary_generation <> $1
+    updated_at = stamp.at
+FROM locked, stamp WHERE f.agent_id = locked.agent_id
 RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
 `
 

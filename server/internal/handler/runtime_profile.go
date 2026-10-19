@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -613,6 +614,15 @@ func (h *Handler) DeleteRuntimeProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var unboundAgents []db.Agent
+	for _, teardown := range teardowns {
+		unboundAgents = append(unboundAgents, teardown.UnboundAgents...)
+	}
+	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, unboundAgents, true); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
+		return
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to commit transaction")
 		return

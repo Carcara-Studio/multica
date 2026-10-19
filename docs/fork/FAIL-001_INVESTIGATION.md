@@ -154,3 +154,13 @@ epochs and expected version, preserving known unavailability and queued proof.
 No production config/task integration is enabled. Complete protected target
 configuration, owner/lifecycle invalidation, all task writers/claim fences and
 credential-faithful tool-free adapters remain required.
+
+## Agent lifecycle integration (2026-10-19)
+
+ADR-020 connects existing Agent edits/clears, protected env/audit, runtime-skill
+controls, archive, member revocation and user-Agent runtime teardown to atomic
+optional state invalidation. Default Agents are never initialized. State locks
+are a final leaf after existing owner/chat/task/audit work; single archive commits
+before cancellation. SQL Agent method signatures/public responses are unchanged.
+Legacy runtime consolidation, runtime/profile/account changes and terminal fork
+row cleanup remain separate gates, alongside config/routing/claim/probe enablement.

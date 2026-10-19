@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/failover"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
@@ -1110,6 +1111,11 @@ func (h *Handler) DeleteAgentRuntime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete runtime")
 		return
 	}
+	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, teardown.UnboundAgents, true); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
+		return
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete runtime")
 		return
@@ -1319,6 +1325,11 @@ func (h *Handler) UnbindAgentsAndDeleteRuntime(w http.ResponseWriter, r *http.Re
 	// Finally delete the runtime row itself.
 	if err := qtx.DeleteAgentRuntime(r.Context(), rt.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete runtime")
+		return
+	}
+
+	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, teardown.UnboundAgents, true); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
 		return
 	}
 

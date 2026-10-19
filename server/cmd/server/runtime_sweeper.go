@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/events"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
@@ -568,6 +569,10 @@ func gcRuntime(ctx context.Context, txStarter runtimeGCTxStarter, queries *db.Qu
 	if err := qtx.DeleteAgentRuntime(ctx, runtimeID); err != nil {
 		return result, fmt.Errorf("delete runtime: %w", err)
 	}
+	if err := failover.InvalidateAgentPolicies(ctx, qtx, teardown.UnboundAgents, true); err != nil {
+		return result, fmt.Errorf("invalidate Agent failover policy: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return result, fmt.Errorf("commit transaction: %w", err)
 	}
