@@ -144,3 +144,13 @@ cleanup is integrated. Model/provider capability validation, target-specific
 overrides, protected secret handling, all enqueue/claim/lifecycle integrations
 and safe primary inference adapters remain required. This is a persistence
 increment, not an enabled fallback feature.
+
+## Metadata gate and atomic invalidation (2026-10-19)
+
+ADR-019 reuses the current upstream option/catalog helpers for an isolated
+necessary metadata assessment; positive metadata is not full tools/probe readiness.
+Existing config update/removal now atomically rotate/invalidate state using both
+epochs and expected version, preserving known unavailability and queued proof.
+No production config/task integration is enabled. Complete protected target
+configuration, owner/lifecycle invalidation, all task writers/claim fences and
+credential-faithful tool-free adapters remain required.

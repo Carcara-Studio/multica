@@ -17,24 +17,65 @@ RETURNING *;
 SELECT * FROM agent_fallback_config WHERE agent_id = @agent_id AND workspace_id = @workspace_id;
 
 -- name: UpdateAgentFallbackConfig :one
--- Every edit needs a new opaque epoch, even when the runtime is unchanged.
+-- Existing config -> state lock order. Every edit rotates both epochs and
+-- invalidates probe authority atomically, without trusting an exhausted primary.
+WITH config AS MATERIALIZED (
+    SELECT c.* FROM agent_fallback_config c
+    WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
+      AND c.generation = @expected_generation AND c.generation <> @new_generation
+      AND EXISTS (SELECT 1 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
+          WHERE a.id = c.agent_id AND a.workspace_id = c.workspace_id AND a.kind = 'user'
+            AND a.archived_at IS NULL AND r.id = @runtime_id
+            AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id)))
+    FOR UPDATE OF c
+), availability AS MATERIALIZED (
+    SELECT s.* FROM agent_failover_state s, config c
+    WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
+      AND s.primary_generation = @expected_primary_generation
+      AND s.primary_generation <> @new_primary_generation AND s.version = @expected_version
+    FOR UPDATE OF s
+), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM availability), rotated AS (
+    UPDATE agent_failover_state s
+    SET primary_generation = @new_primary_generation, version = s.version + 1,
+        state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
+        next_probe_at = CASE WHEN s.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
+        probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        updated_at = stamp.at
+    FROM availability a, stamp WHERE s.agent_id = a.agent_id
+    RETURNING s.agent_id
+)
 UPDATE agent_fallback_config c
 SET runtime_id = @runtime_id, generation = @new_generation,
     model = @model, thinking_level = @thinking_level, service_tier = @service_tier,
-    updated_at = clock_timestamp()
-WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
-  AND c.generation = @expected_generation AND c.generation <> @new_generation
-  AND EXISTS (SELECT 1 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
-      WHERE a.id = c.agent_id AND a.workspace_id = c.workspace_id AND a.kind = 'user'
-        AND a.archived_at IS NULL AND r.id = @runtime_id
-        AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id)))
+    updated_at = stamp.at
+FROM rotated, stamp WHERE c.agent_id = rotated.agent_id
 RETURNING c.*;
 
 -- name: DeleteAgentFallbackConfig :execrows
--- Removal does not recover primary. Caller must suspend/invalidate state in
--- the same transaction; queued route proofs are retained and fail closed.
-DELETE FROM agent_fallback_config
-WHERE agent_id = @agent_id AND workspace_id = @workspace_id AND generation = @expected_generation;
+-- Removal suspends and rotates policy in the same statement. It neither
+-- proves primary health nor erases queued route proof. Owner locks are external.
+WITH config AS MATERIALIZED (
+    SELECT c.* FROM agent_fallback_config c
+    WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id AND c.generation = @expected_generation
+    FOR UPDATE
+), availability AS MATERIALIZED (
+    SELECT s.* FROM agent_failover_state s, config c
+    WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
+      AND s.primary_generation = @expected_primary_generation
+      AND s.primary_generation <> @new_primary_generation AND s.version = @expected_version
+    FOR UPDATE OF s
+), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM availability), suspended AS (
+    UPDATE agent_failover_state s
+    SET primary_generation = @new_primary_generation, version = s.version + 1,
+        suspended_at = stamp.at,
+        state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
+        next_probe_at = CASE WHEN s.state = 'primary_probing' THEN stamp.at + interval '30 minutes' ELSE s.next_probe_at END,
+        probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        updated_at = stamp.at
+    FROM availability a, stamp WHERE s.agent_id = a.agent_id
+    RETURNING s.agent_id
+)
+DELETE FROM agent_fallback_config c USING suspended WHERE c.agent_id = suspended.agent_id;
 
 -- name: RecordAgentTaskExecutionRoute :one
 -- Called in the SAME transaction as task insertion. Acquire upstream owner

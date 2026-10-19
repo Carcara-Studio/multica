@@ -55,20 +55,50 @@ func (q *Queries) CopyAgentTaskExecutionRouteForRetry(ctx context.Context, arg C
 }
 
 const deleteAgentFallbackConfig = `-- name: DeleteAgentFallbackConfig :execrows
-DELETE FROM agent_fallback_config
-WHERE agent_id = $1 AND workspace_id = $2 AND generation = $3
+WITH config AS MATERIALIZED (
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at FROM agent_fallback_config c
+    WHERE c.agent_id = $1 AND c.workspace_id = $2 AND c.generation = $3
+    FOR UPDATE
+), availability AS MATERIALIZED (
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
+    WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
+      AND s.primary_generation = $4
+      AND s.primary_generation <> $5 AND s.version = $6
+    FOR UPDATE OF s
+), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM availability), suspended AS (
+    UPDATE agent_failover_state s
+    SET primary_generation = $5, version = s.version + 1,
+        suspended_at = stamp.at,
+        state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
+        next_probe_at = CASE WHEN s.state = 'primary_probing' THEN stamp.at + interval '30 minutes' ELSE s.next_probe_at END,
+        probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        updated_at = stamp.at
+    FROM availability a, stamp WHERE s.agent_id = a.agent_id
+    RETURNING s.agent_id
+)
+DELETE FROM agent_fallback_config c USING suspended WHERE c.agent_id = suspended.agent_id
 `
 
 type DeleteAgentFallbackConfigParams struct {
-	AgentID            pgtype.UUID `json:"agent_id"`
-	WorkspaceID        pgtype.UUID `json:"workspace_id"`
-	ExpectedGeneration pgtype.UUID `json:"expected_generation"`
+	AgentID                   pgtype.UUID `json:"agent_id"`
+	WorkspaceID               pgtype.UUID `json:"workspace_id"`
+	ExpectedGeneration        pgtype.UUID `json:"expected_generation"`
+	ExpectedPrimaryGeneration pgtype.UUID `json:"expected_primary_generation"`
+	NewPrimaryGeneration      pgtype.UUID `json:"new_primary_generation"`
+	ExpectedVersion           int64       `json:"expected_version"`
 }
 
-// Removal does not recover primary. Caller must suspend/invalidate state in
-// the same transaction; queued route proofs are retained and fail closed.
+// Removal suspends and rotates policy in the same statement. It neither
+// proves primary health nor erases queued route proof. Owner locks are external.
 func (q *Queries) DeleteAgentFallbackConfig(ctx context.Context, arg DeleteAgentFallbackConfigParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAgentFallbackConfig, arg.AgentID, arg.WorkspaceID, arg.ExpectedGeneration)
+	result, err := q.db.Exec(ctx, deleteAgentFallbackConfig,
+		arg.AgentID,
+		arg.WorkspaceID,
+		arg.ExpectedGeneration,
+		arg.ExpectedPrimaryGeneration,
+		arg.NewPrimaryGeneration,
+		arg.ExpectedVersion,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -264,31 +294,55 @@ func (q *Queries) RecordAgentTaskExecutionRoute(ctx context.Context, arg RecordA
 }
 
 const updateAgentFallbackConfig = `-- name: UpdateAgentFallbackConfig :one
+WITH config AS MATERIALIZED (
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at FROM agent_fallback_config c
+    WHERE c.agent_id = $6 AND c.workspace_id = $7
+      AND c.generation = $8 AND c.generation <> $2
+      AND EXISTS (SELECT 1 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
+          WHERE a.id = c.agent_id AND a.workspace_id = c.workspace_id AND a.kind = 'user'
+            AND a.archived_at IS NULL AND r.id = $1
+            AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id)))
+    FOR UPDATE OF c
+), availability AS MATERIALIZED (
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
+    WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
+      AND s.primary_generation = $9
+      AND s.primary_generation <> $10 AND s.version = $11
+    FOR UPDATE OF s
+), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM availability), rotated AS (
+    UPDATE agent_failover_state s
+    SET primary_generation = $10, version = s.version + 1,
+        state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
+        next_probe_at = CASE WHEN s.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
+        probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        updated_at = stamp.at
+    FROM availability a, stamp WHERE s.agent_id = a.agent_id
+    RETURNING s.agent_id
+)
 UPDATE agent_fallback_config c
 SET runtime_id = $1, generation = $2,
     model = $3, thinking_level = $4, service_tier = $5,
-    updated_at = clock_timestamp()
-WHERE c.agent_id = $6 AND c.workspace_id = $7
-  AND c.generation = $8 AND c.generation <> $2
-  AND EXISTS (SELECT 1 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
-      WHERE a.id = c.agent_id AND a.workspace_id = c.workspace_id AND a.kind = 'user'
-        AND a.archived_at IS NULL AND r.id = $1
-        AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id)))
+    updated_at = stamp.at
+FROM rotated, stamp WHERE c.agent_id = rotated.agent_id
 RETURNING c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at
 `
 
 type UpdateAgentFallbackConfigParams struct {
-	RuntimeID          pgtype.UUID `json:"runtime_id"`
-	NewGeneration      pgtype.UUID `json:"new_generation"`
-	Model              string      `json:"model"`
-	ThinkingLevel      string      `json:"thinking_level"`
-	ServiceTier        string      `json:"service_tier"`
-	AgentID            pgtype.UUID `json:"agent_id"`
-	WorkspaceID        pgtype.UUID `json:"workspace_id"`
-	ExpectedGeneration pgtype.UUID `json:"expected_generation"`
+	RuntimeID                 pgtype.UUID `json:"runtime_id"`
+	NewGeneration             pgtype.UUID `json:"new_generation"`
+	Model                     string      `json:"model"`
+	ThinkingLevel             string      `json:"thinking_level"`
+	ServiceTier               string      `json:"service_tier"`
+	AgentID                   pgtype.UUID `json:"agent_id"`
+	WorkspaceID               pgtype.UUID `json:"workspace_id"`
+	ExpectedGeneration        pgtype.UUID `json:"expected_generation"`
+	ExpectedPrimaryGeneration pgtype.UUID `json:"expected_primary_generation"`
+	NewPrimaryGeneration      pgtype.UUID `json:"new_primary_generation"`
+	ExpectedVersion           int64       `json:"expected_version"`
 }
 
-// Every edit needs a new opaque epoch, even when the runtime is unchanged.
+// Existing config -> state lock order. Every edit rotates both epochs and
+// invalidates probe authority atomically, without trusting an exhausted primary.
 func (q *Queries) UpdateAgentFallbackConfig(ctx context.Context, arg UpdateAgentFallbackConfigParams) (AgentFallbackConfig, error) {
 	row := q.db.QueryRow(ctx, updateAgentFallbackConfig,
 		arg.RuntimeID,
@@ -299,6 +353,9 @@ func (q *Queries) UpdateAgentFallbackConfig(ctx context.Context, arg UpdateAgent
 		arg.AgentID,
 		arg.WorkspaceID,
 		arg.ExpectedGeneration,
+		arg.ExpectedPrimaryGeneration,
+		arg.NewPrimaryGeneration,
+		arg.ExpectedVersion,
 	)
 	var i AgentFallbackConfig
 	err := row.Scan(
