@@ -165,7 +165,8 @@ func TestChatDeletionOnlyCleansTerminalBuilderPolicy(t *testing.T) {
 				fx.Exec(t, "UPDATE agent SET kind='system', system_key='agent_builder:test' WHERE id=$1", id)
 			}
 			session := fx.ChatSession(t, id)
-			req := withURLParam(newRequest(http.MethodDelete, "/api/chat-sessions/"+session, nil), "sessionId", session)
+			req := withURLParam(newRequest(http.MethodDelete, "/api/chat/sessions/"+session, nil), "sessionId", session)
+			req = withChatTestWorkspaceCtx(t, req)
 			testutil.Call(t, testHandler.DeleteChatSession, req).Want(http.StatusNoContent)
 			if !builder {
 				if mutationState(t, id) != old {
