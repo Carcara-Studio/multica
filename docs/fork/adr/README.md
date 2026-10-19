@@ -187,6 +187,7 @@ ADR-021 — Runtime lifecycle invalidation and terminal cleanup
 ADR-022 — Protected target configuration boundary
 ADR-023 — Target-scoped evidence and immutable route resolution
 ADR-024 — Server-owned live RPC connection identity
+ADR-025 — Durable single-consumption execution evidence challenges
 ```
 
 ### Governance

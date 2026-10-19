@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -83,7 +84,7 @@ func TestAgentEditsInvalidateExecutionPolicyOnlyForStoredChanges(t *testing.T) {
 			testutil.Call(t, testHandler.UpdateAgent, req).Want(http.StatusOK)
 			if tc.change {
 				assertMutationFenced(t, id, old, false)
-			} else if mutationState(t, id) != old {
+			} else if !reflect.DeepEqual(mutationState(t, id), old) {
 				t.Fatal("cosmetic/no-op edit changed availability")
 			}
 		})
@@ -105,7 +106,7 @@ func TestAgentEnvAndArchiveUseAtomicInvalidation(t *testing.T) {
 		suspended := mutationState(t, id)
 		req = withURLParam(newRequest(http.MethodPost, "/api/agents/"+id+"/restore", nil), "id", id)
 		testutil.Call(t, testHandler.RestoreAgent, req).Want(http.StatusOK)
-		if mutationState(t, id) != suspended {
+		if !reflect.DeepEqual(mutationState(t, id), suspended) {
 			t.Fatal("restore silently resumed or recovered primary")
 		}
 	})
@@ -142,7 +143,7 @@ func TestAgentInvalidationFailureRollsBackMutationAndEnvAudit(t *testing.T) {
 			var audits int
 			fx.QueryRow(t, `SELECT model,custom_env->>'KEY',archived_at IS NOT NULL FROM agent WHERE id=$1`, id).Scan(&model, &env, &archived)
 			fx.QueryRow(t, `SELECT count(*) FROM activity_log WHERE details->>'agent_id'=$1 AND action='agent_env_updated'`, id).Scan(&audits)
-			if model != "claude-test" || env != "old-secret" || archived || audits != 0 || mutationState(t, id) != old {
+			if model != "claude-test" || env != "old-secret" || archived || audits != 0 || !reflect.DeepEqual(mutationState(t, id), old) {
 				t.Fatal("failed invalidation committed a partial Agent/env/audit/archive mutation")
 			}
 		})
@@ -178,7 +179,7 @@ func TestRuntimeTeardownSuspendsPrimaryFailoverPolicy(t *testing.T) {
 				t.Fatal(err)
 			}
 			if fail {
-				if a.RuntimeID != parseUUID(runtime) || mutationState(t, id) != old {
+				if a.RuntimeID != parseUUID(runtime) || !reflect.DeepEqual(mutationState(t, id), old) {
 					t.Fatal("failed invalidation did not roll back runtime teardown")
 				}
 				if _, err := testHandler.Queries.GetAgentRuntime(t.Context(), parseUUID(runtime)); err != nil {

@@ -249,7 +249,7 @@ func TestProtectedTargetFailuresNeverGrantUnauditedSecretsOrPartialWrites(t *tes
 			if !errors.Is(err, ErrTargetStore) || strings.Contains(err.Error(), "private-value") {
 				t.Fatal("save failure leaked or was ignored", err)
 			}
-			if auditCount(t, f) != 1 || !reflect.DeepEqual(storedConfig(t, f.q, previous), previous) || storedState(t, f.q, f) != state {
+			if auditCount(t, f) != 1 || !reflect.DeepEqual(storedConfig(t, f.q, previous), previous) || !reflect.DeepEqual(storedState(t, f.q, f), state) {
 				t.Fatal("failed save escaped transaction rollback")
 			}
 		})
@@ -438,7 +438,7 @@ func TestProtectedTargetRuntimeContentionReleasesAgentWithoutWaiting(t *testing.
 	if _, err = f.q.WithTx(owner).GetAgentForUpdate(ctx, in.AgentID); err != nil {
 		t.Fatal("failed config save kept Agent locked", err)
 	}
-	if auditCount(t, f) != 0 || storedState(t, f.q, f) != f.row {
+	if auditCount(t, f) != 0 || !reflect.DeepEqual(storedState(t, f.q, f), f.row) {
 		t.Fatal("contended save left audit/state changes")
 	}
 	if err = owner.Rollback(ctx); err != nil {

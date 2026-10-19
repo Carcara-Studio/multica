@@ -60,7 +60,7 @@ WITH config AS MATERIALIZED (
     WHERE c.agent_id = $1 AND c.workspace_id = $2 AND c.generation = $3
     FOR UPDATE
 ), availability AS MATERIALIZED (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s, config c
     WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
       AND s.primary_generation = $4
       AND s.primary_generation <> $5 AND s.version = $6
@@ -72,6 +72,7 @@ WITH config AS MATERIALIZED (
         state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
         next_probe_at = CASE WHEN s.state = 'primary_probing' THEN stamp.at + interval '30 minutes' ELSE s.next_probe_at END,
         probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
         updated_at = stamp.at
     FROM availability a, stamp WHERE s.agent_id = a.agent_id
     RETURNING s.agent_id
@@ -237,7 +238,7 @@ WITH config AS MATERIALIZED (
       AND c.generation = $5
     FOR SHARE
 ), availability AS MATERIALIZED (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s, config c
     WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
       AND s.primary_generation = $6 AND s.version = $7
       AND s.suspended_at IS NULL
@@ -339,7 +340,7 @@ WITH config AS MATERIALIZED (
             AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id)))
     FOR UPDATE OF c
 ), availability AS MATERIALIZED (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s, config c
     WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
       AND s.primary_generation = $10
       AND s.primary_generation <> $11 AND s.version = $12
@@ -350,6 +351,7 @@ WITH config AS MATERIALIZED (
         state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
         next_probe_at = CASE WHEN s.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
         probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
         updated_at = stamp.at
     FROM availability a, stamp WHERE s.agent_id = a.agent_id
     RETURNING s.agent_id
