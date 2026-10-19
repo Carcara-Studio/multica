@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/attribution"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
@@ -2251,7 +2252,19 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updated, err := h.Queries.UpdateAgent(r.Context(), params)
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to begin agent update")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+	locked, err := qtx.GetAgentForUpdate(r.Context(), existing.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock agent")
+		return
+	}
+	updated, err := qtx.UpdateAgent(r.Context(), params)
 	if err != nil {
 		// Unique constraint on (workspace_id, name) — mirror CreateAgent and
 		// return a clear conflict instead of a 500 that leaks the raw
@@ -2277,7 +2290,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// clear the field. COALESCE in UpdateAgent cannot set a column to NULL, so
 	// mcp_config, thinking_level, and service_tier use dedicated clear queries.
 	if shouldClearMcpConfig {
-		updated, err = h.Queries.ClearAgentMcpConfig(r.Context(), updated.ID)
+		updated, err = qtx.ClearAgentMcpConfig(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent mcp_config failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear mcp_config")
@@ -2285,7 +2298,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if shouldClearThinkingLevel {
-		updated, err = h.Queries.ClearAgentThinkingLevel(r.Context(), updated.ID)
+		updated, err = qtx.ClearAgentThinkingLevel(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent thinking_level failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear thinking_level")
@@ -2293,7 +2306,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if shouldClearServiceTier {
-		updated, err = h.Queries.ClearAgentServiceTier(r.Context(), updated.ID)
+		updated, err = qtx.ClearAgentServiceTier(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent service_tier failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear service_tier")
@@ -2301,7 +2314,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if shouldClearComposioAllowlist {
-		updated, err = h.Queries.ClearAgentComposioToolkitAllowlist(r.Context(), updated.ID)
+		updated, err = qtx.ClearAgentComposioToolkitAllowlist(r.Context(), updated.ID)
 		if err != nil {
 			slog.Warn("clear agent composio_toolkit_allowlist failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear composio_toolkit_allowlist")
@@ -2313,11 +2326,20 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// permission. Done after the row update so a permission_mode flip and its
 	// targets land together.
 	if replacePermissionTargets {
-		if err := h.replaceInvocationTargets(r.Context(), updated.ID, parseUUID(requestUserID(r)), resolvedPerm.targets); err != nil {
+		if err := replaceInvocationTargetsWithQueries(r.Context(), qtx, updated.ID, parseUUID(requestUserID(r)), resolvedPerm.targets); err != nil {
 			slog.Warn("update agent: persist invocation targets failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to update invocation targets")
 			return
 		}
+	}
+
+	if err := failover.InvalidateAgentChange(r.Context(), qtx, locked, updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit agent update")
+		return
 	}
 
 	resp := h.agentToResponse(updated)
@@ -2586,13 +2608,38 @@ func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := requestUserID(r)
-	archived, err := h.Queries.ArchiveAgent(r.Context(), db.ArchiveAgentParams{
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to begin agent archive")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+	locked, err := qtx.GetAgentForUpdate(r.Context(), agent.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock agent")
+		return
+	}
+	if locked.ArchivedAt.Valid {
+		writeError(w, http.StatusConflict, "agent is already archived")
+		return
+	}
+	archived, err := qtx.ArchiveAgent(r.Context(), db.ArchiveAgentParams{
 		ID:         agent.ID,
 		ArchivedBy: parseUUID(userID),
 	})
 	if err != nil {
 		slog.Warn("archive agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 		writeError(w, http.StatusInternalServerError, "failed to archive agent")
+		return
+	}
+
+	if err := failover.InvalidateAgentChange(r.Context(), qtx, locked, archived); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit agent archive")
 		return
 	}
 

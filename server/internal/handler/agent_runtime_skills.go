@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -172,13 +173,19 @@ func (h *Handler) SetAgentRuntimeSkillEnabled(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to encode runtime skill settings")
 		return
 	}
-	if _, err := qtx.UpdateAgentDisabledRuntimeSkills(r.Context(), db.UpdateAgentDisabledRuntimeSkillsParams{
+	updated, err := qtx.UpdateAgentDisabledRuntimeSkills(r.Context(), db.UpdateAgentDisabledRuntimeSkillsParams{
 		ID:                    locked.ID,
 		DisabledRuntimeSkills: payload,
-	}); err != nil {
+	})
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update runtime skill")
 		return
 	}
+	if err := failover.InvalidateAgentChange(r.Context(), qtx, locked, updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
+		return
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to commit")
 		return

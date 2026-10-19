@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -221,6 +222,10 @@ func (h *Handler) revokeAndRemoveMember(ctx context.Context, workspaceID, userID
 		}
 	}
 	if err := qtx.DeleteMember(ctx, memberID); err != nil {
+		return empty, err
+	}
+
+	if err := failover.InvalidateAgentPolicies(ctx, qtx, result.ArchivedAgents, true); err != nil {
 		return empty, err
 	}
 
