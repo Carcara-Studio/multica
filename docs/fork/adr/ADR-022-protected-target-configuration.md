@@ -32,11 +32,20 @@ can be inspected/revealed/removed, but cannot save new target settings.
 
 ## Transactions and concurrency
 
-Acquire workspace KEY SHARE, check current membership and ownership, then for a
-save lock primary/requested fallback runtimes in stable ID order, then the Agent.
-Recheck membership/ownership and current primary identity before mutation. Runtime
-workspace/private-owner constraints apply to the Agent owner, not the managing
-admin. No runtime lookup occurs after config/state locks.
+Acquire workspace KEY SHARE, check membership/ownership, then lock the Agent
+and recheck current authority/primary identity. For a save, try primary/requested
+fallback runtime SHARE locks in stable ID order with NOWAIT. SHARE stabilizes
+owner/visibility/provider metadata and remains compatible with upstream KEY SHARE
+FK/task-owner validation. Runtime contention returns a conflict and releases the
+Agent, rather than introducing a blocking Agent -> runtime edge against teardown
+and metadata writers that own runtime first. Acquiring runtime UPDATE before
+waiting on Agent also inverts ordinary Agent binding validation. Member revocation
+archives Agents before updating runtimes, so simply moving blocking runtime locks
+ahead of Agent does not close the existing graph either.
+
+Runtime workspace/private-owner constraints apply to the Agent owner, not the
+managing admin. No owner/runtime lookup occurs after config/state locks. A caller
+must reload/revalidate after a conflict; this boundary does not spin or retry.
 
 Save/remove require the expected config generation, primary generation and state
 version; stale or concurrent edits fail without a lasting audit/write. All owner

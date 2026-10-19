@@ -297,6 +297,37 @@ func (q *Queries) RecordAgentTaskExecutionRoute(ctx context.Context, arg RecordA
 	return i, err
 }
 
+const tryLockExecutionTargetRuntimesForShare = `-- name: TryLockExecutionTargetRuntimesForShare :many
+SELECT id FROM agent_runtime
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR SHARE NOWAIT
+`
+
+// Stabilize owner/visibility/provider metadata against updates and teardown,
+// while remaining compatible with upstream FK/task-owner KEY SHARE locks.
+// Caller owns Agent first. NOWAIT avoids a blocking Agent -> runtime edge
+// against runtime teardown/metadata writers that lock runtime before Agent.
+func (q *Queries) TryLockExecutionTargetRuntimesForShare(ctx context.Context, runtimeIds []pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, tryLockExecutionTargetRuntimesForShare, runtimeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAgentFallbackConfig = `-- name: UpdateAgentFallbackConfig :one
 WITH config AS MATERIALIZED (
     SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c

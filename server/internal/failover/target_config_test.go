@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/multica-ai/multica/server/internal/testutil"
@@ -370,4 +371,78 @@ func TestMetadataOnlyEditClearsProtectedOverrides(t *testing.T) {
 	if _, err := m.Reveal(t.Context(), a, in.AgentID); !errors.Is(err, ErrTargetUnavailable) {
 		t.Fatal("metadata-only target exposed old override values")
 	}
+}
+
+func TestProtectedTargetRuntimeLocksAllowAgentBindingValidation(t *testing.T) {
+	f, m, a, in := managementFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	owner, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Rollback(ctx)
+	if _, err = f.q.WithTx(owner).GetAgentForUpdate(ctx, in.AgentID); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	done := make(chan struct{})
+	go func() { defer close(done); _, err := m.Save(ctx, a, in, agent.Catalog{}); result <- err }()
+	defer func() { cancel(); _ = owner.Rollback(context.Background()); <-done }()
+	blocked := false
+	for until := time.Now().Add(3 * time.Second); time.Now().Before(until); {
+		err = f.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '-- name: GetAgentForUpdate%' AND $1::int=ANY(pg_blocking_pids(pid)))`, int32(owner.Conn().PgConn().PID())).Scan(&blocked)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("manager never reached Agent lock")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if !blocked {
+		t.Fatal("could not establish manager Agent wait")
+	}
+	// Validate the new binding through the real upstream runtime FK while the
+	// manager waits on Agent. Save must not pre-acquire a conflicting runtime lock.
+	if _, err = owner.Exec(ctx, `UPDATE agent SET runtime_id=$1 WHERE id=$2`, in.RuntimeID, in.AgentID); err != nil {
+		t.Fatal("config lock blocked upstream binding validation", err)
+	}
+	if err = owner.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-result; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProtectedTargetRuntimeContentionReleasesAgentWithoutWaiting(t *testing.T) {
+	f, m, a, in := managementFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	owner, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Rollback(context.Background())
+	if _, err = f.q.WithTx(owner).LockAgentRuntime(ctx, in.RuntimeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Save(ctx, a, in, agent.Catalog{}); !errors.Is(err, ErrTargetConflict) || ctx.Err() != nil {
+		t.Fatal("runtime contention waited or leaked storage error", err)
+	}
+	if _, err = f.q.WithTx(owner).GetAgentForUpdate(ctx, in.AgentID); err != nil {
+		t.Fatal("failed config save kept Agent locked", err)
+	}
+	if auditCount(t, f) != 0 || storedState(t, f.q, f) != f.row {
+		t.Fatal("contended save left audit/state changes")
+	}
+	if err = owner.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	saveManaged(t, m, a, in)
 }

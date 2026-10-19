@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/agentsecrets"
 	"github.com/multica-ai/multica/server/pkg/agent"
@@ -88,28 +89,6 @@ func (m ConfigManager) begin(ctx context.Context, actor ManagementActor, id pgty
 	if err != nil || !managementMemberAllowed(before, member) {
 		return fail(ErrTargetAccess)
 	}
-	if target.Valid {
-		if !nonzeroUUID(target) || !nonzeroUUID(before.RuntimeID) {
-			return fail(ErrTargetIncompatible)
-		}
-		for _, id := range []pgtype.UUID{before.RuntimeID, target} {
-			runtime, err := q.GetAgentRuntime(ctx, id)
-			if err != nil || !managementRuntimeAllowed(before, runtime) {
-				return fail(ErrTargetIncompatible)
-			}
-		}
-		ids := []pgtype.UUID{before.RuntimeID}
-		if target != before.RuntimeID {
-			ids = append(ids, target)
-		}
-		rows, err := q.LockRuntimesForMerge(ctx, ids)
-		if err != nil {
-			return fail(ErrTargetStore)
-		}
-		if len(rows) != len(ids) {
-			return fail(ErrTargetIncompatible)
-		}
-	}
 	current, err := q.GetAgentForUpdate(ctx, id)
 	if err != nil || current.WorkspaceID != actor.WorkspaceID {
 		return fail(ErrTargetAccess)
@@ -123,6 +102,32 @@ func (m ConfigManager) begin(ctx context.Context, actor ManagementActor, id pgty
 	}
 	if current.Kind != "user" {
 		return fail(ErrTargetAccess)
+	}
+	if target.Valid {
+		if !nonzeroUUID(target) || !nonzeroUUID(current.RuntimeID) {
+			return fail(ErrTargetIncompatible)
+		}
+		for _, id := range []pgtype.UUID{current.RuntimeID, target} {
+			runtime, err := q.GetAgentRuntime(ctx, id)
+			if err != nil || !managementRuntimeAllowed(current, runtime) {
+				return fail(ErrTargetIncompatible)
+			}
+		}
+		ids := []pgtype.UUID{current.RuntimeID}
+		if target != current.RuntimeID {
+			ids = append(ids, target)
+		}
+		rows, err := q.TryLockExecutionTargetRuntimesForShare(ctx, ids)
+		if err != nil {
+			var databaseError *pgconn.PgError
+			if errors.As(err, &databaseError) && databaseError.Code == "55P03" {
+				return fail(ErrTargetConflict)
+			}
+			return fail(ErrTargetStore)
+		}
+		if len(rows) != len(ids) {
+			return fail(ErrTargetIncompatible)
+		}
 	}
 	return tx, q, current, nil
 }

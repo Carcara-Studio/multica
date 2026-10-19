@@ -134,3 +134,13 @@ RETURNING *;
 -- name: DeleteAgentTaskExecutionRoutes :execrows
 -- Terminal lifecycle cleanup only; never remove proof to reroute queued work.
 DELETE FROM agent_task_execution_route WHERE workspace_id = @workspace_id AND agent_id = @agent_id;
+
+-- name: TryLockExecutionTargetRuntimesForShare :many
+-- Stabilize owner/visibility/provider metadata against updates and teardown,
+-- while remaining compatible with upstream FK/task-owner KEY SHARE locks.
+-- Caller owns Agent first. NOWAIT avoids a blocking Agent -> runtime edge
+-- against runtime teardown/metadata writers that lock runtime before Agent.
+SELECT id FROM agent_runtime
+WHERE id = ANY(@runtime_ids::uuid[])
+ORDER BY id
+FOR SHARE NOWAIT;
