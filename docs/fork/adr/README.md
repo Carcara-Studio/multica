@@ -184,6 +184,7 @@ ADR-018 — Opt-in task route proof and target persistence
 ADR-019 — Target metadata assessment and atomic config invalidation
 ADR-020 — Atomic Agent mutation and failover invalidation
 ADR-021 — Runtime lifecycle invalidation and terminal cleanup
+ADR-022 — Protected target configuration boundary
 ```
 
 ### Governance

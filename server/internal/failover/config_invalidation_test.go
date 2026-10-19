@@ -2,6 +2,7 @@ package failover
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func TestConfigEditAtomicallyInvalidatesDispatchedProbeAndQueuedProof(t *testing
 	}
 	_, err = f.q.UpdateAgentFallbackConfig(ctx, args)
 	wantNoTransition(t, err)
-	if storedState(t, f.q, f) != s || storedConfig(t, f.q, c) != updated {
+	if storedState(t, f.q, f) != s || !reflect.DeepEqual(storedConfig(t, f.q, c), updated) {
 		t.Fatal("stale edit mutated config/state")
 	}
 }
@@ -116,7 +117,7 @@ func TestConfigMutationRollbackAndRemovalDoNotRecoverPrimary(t *testing.T) {
 		if err := tx.Rollback(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if storedState(t, f.q, f) != p || storedConfig(t, f.q, c) != c {
+		if storedState(t, f.q, f) != p || !reflect.DeepEqual(storedConfig(t, f.q, c), c) {
 			t.Fatal("rollback lost config or probe authority")
 		}
 	}
@@ -153,7 +154,7 @@ func TestConfigMutationsRequireMatchingStateAndPreserveSuspension(t *testing.T) 
 	if err != nil || n != 0 {
 		t.Fatalf("stale state delete=%d err=%v", n, err)
 	}
-	if storedState(t, f.q, f) != f.row || storedConfig(t, f.q, c) != c {
+	if storedState(t, f.q, f) != f.row || !reflect.DeepEqual(storedConfig(t, f.q, c), c) {
 		t.Fatal("mismatched state changed config")
 	}
 	s, err := f.q.SuspendAgentFailoverState(ctx, db.SuspendAgentFailoverStateParams{AgentID: c.AgentID, WorkspaceID: c.WorkspaceID})
@@ -175,7 +176,7 @@ func TestConfigMutationsRequireMatchingStateAndPreserveSuspension(t *testing.T) 
 	if err != nil || n != 0 {
 		t.Fatalf("orphan remove=%d err=%v", n, err)
 	}
-	if storedConfig(t, f.q, c) != c {
+	if !reflect.DeepEqual(storedConfig(t, f.q, c), c) {
 		t.Fatal("missing state authorized config mutation")
 	}
 }

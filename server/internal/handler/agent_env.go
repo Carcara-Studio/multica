@@ -9,19 +9,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/agentsecrets"
 	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
-
-// envSentinel is the masked marker the UI / clients see in place of a
-// real value. A PUT body carrying it for a given key means "do not
-// overwrite the existing value for that key" — a defense-in-depth
-// guard so a client that round-trips a partially-revealed map cannot
-// silently destroy real secrets by saving the masked placeholder.
-const envSentinel = "****"
 
 // agentEnvActivityRevealed and agentEnvActivityUpdated are the
 // activity_log `action` constants for the two env-management
@@ -99,32 +93,12 @@ func (h *Handler) authorizeAgentEnv(w http.ResponseWriter, r *http.Request) (db.
 	if !ok {
 		return db.Agent{}, db.Member{}, false
 	}
-	if !canManageAgentEnv(agent, member) {
+	if !agentsecrets.CanManage(agent, member) {
 		writeError(w, http.StatusForbidden, "only the agent owner or a workspace owner/admin can manage this agent's env")
 		return db.Agent{}, db.Member{}, false
 	}
 
 	return agent, member, true
-}
-
-// canManageAgentEnv is the pure half of the env authorization rule:
-// a workspace owner/admin, or the human who owns the agent. Mirrors
-// canManageAgent (update/archive) so a member who can manage an agent
-// can also rotate its secrets.
-//
-// The owner comparison deliberately runs against member.UserID rather
-// than requestUserID(r). agent.owner_id is nullable (migration 001) and
-// uuidToString renders a NULL UUID as "", so comparing against a raw
-// header — which can also be empty — would make every NULL-owner agent
-// readable by anyone. member.UserID only exists after the membership
-// lookup succeeded, and the empty-owner guard below closes the case
-// from the other side as well.
-func canManageAgentEnv(agent db.Agent, member db.Member) bool {
-	if roleAllowed(member.Role, "owner", "admin") {
-		return true
-	}
-	ownerID := uuidToString(agent.OwnerID)
-	return ownerID != "" && ownerID == uuidToString(member.UserID)
 }
 
 // GetAgentEnv returns the plaintext custom_env map for a single agent
@@ -176,7 +150,7 @@ func (h *Handler) GetAgentEnv(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateAgentEnv replaces an agent's custom_env wholesale. The **** marker is
-// honoured per-key: any value equal to envSentinel is treated as
+// honoured per-key: any value equal to agentsecrets.Sentinel is treated as
 // "keep the existing value for that key", protecting against the
 // scenario where a UI fetches the env, exposes some values but leaves
 // others masked, and then naively PUTs the whole map back. A
@@ -219,7 +193,7 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	existing := unmarshalCustomEnv(locked)
-	merged, audit := mergeAgentEnv(existing, req.CustomEnv)
+	merged, audit := agentsecrets.MergeEnvironment(existing, req.CustomEnv)
 
 	envBytes, err := json.Marshal(merged)
 	if err != nil {
@@ -241,10 +215,10 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 	auditDetails := map[string]any{
 		"agent_id":       uuidToString(agent.ID),
 		"agent_name":     locked.Name,
-		"added_keys":     audit.added,
-		"removed_keys":   audit.removed,
-		"changed_keys":   audit.changed,
-		"preserved_keys": audit.preserved,
+		"added_keys":     audit.Added,
+		"removed_keys":   audit.Removed,
+		"changed_keys":   audit.Changed,
+		"preserved_keys": audit.Preserved,
 	}
 	details, _ := json.Marshal(auditDetails)
 	if _, err := qtx.CreateActivity(r.Context(), db.CreateActivityParams{
@@ -292,71 +266,6 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 		AgentID:   uuidToString(updated.ID),
 		CustomEnv: merged,
 	})
-}
-
-// envAudit summarises the diff between an agent's existing env and the
-// new one, broken down so an auditor can reconstruct exactly which
-// keys an operation touched without leaking values. All slices are
-// sorted to keep the activity row content deterministic for tests and
-// downstream tooling.
-type envAudit struct {
-	added     []string
-	removed   []string
-	changed   []string
-	preserved []string
-}
-
-// mergeAgentEnv applies the **** sentinel rule and returns both the
-// final map to persist and an audit summary of which keys changed.
-// Behaviour:
-//   - request key present, value == "****", key exists in `existing`
-//     → keep the existing value, append to preserved
-//   - request key present, value == "****", key NOT in `existing`
-//     → drop the key (literal "****" is never a valid stored value)
-//   - request key present, value != "****", key already in existing
-//     with same value → no-op (not counted)
-//   - request key present, value != "****", different from existing
-//     → write new value, append to changed
-//   - request key present, value != "****", key NOT in existing
-//     → write new value, append to added
-//   - key in existing but absent from request → removed
-func mergeAgentEnv(existing, request map[string]string) (map[string]string, envAudit) {
-	merged := make(map[string]string, len(request))
-	audit := envAudit{}
-
-	for k, v := range request {
-		if v == envSentinel {
-			if old, ok := existing[k]; ok {
-				merged[k] = old
-				audit.preserved = append(audit.preserved, k)
-			}
-			// else: drop. We never persist a literal "****".
-			continue
-		}
-		if old, ok := existing[k]; ok {
-			if old == v {
-				merged[k] = v
-				continue
-			}
-			merged[k] = v
-			audit.changed = append(audit.changed, k)
-			continue
-		}
-		merged[k] = v
-		audit.added = append(audit.added, k)
-	}
-
-	for k := range existing {
-		if _, ok := request[k]; !ok {
-			audit.removed = append(audit.removed, k)
-		}
-	}
-
-	sort.Strings(audit.added)
-	sort.Strings(audit.removed)
-	sort.Strings(audit.changed)
-	sort.Strings(audit.preserved)
-	return merged, audit
 }
 
 // unmarshalCustomEnv decodes an agent's stored custom_env bytea into a

@@ -1,6 +1,7 @@
 package failover
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -165,7 +166,7 @@ func TestFallbackMetadataUsesUpstreamCatalogSemantics(t *testing.T) {
 			if got.Status != tc.status || got.Reason != tc.reason {
 				t.Fatalf("got %+v want %s/%s", got, tc.status, tc.reason)
 			}
-			if c != before {
+			if !reflect.DeepEqual(c, before) {
 				t.Fatal("assessment rewrote saved options")
 			}
 		})

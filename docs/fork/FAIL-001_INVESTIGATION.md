@@ -178,3 +178,16 @@ prune optional config/state/route rows; ordinary chat deletion preserves policy.
 No automatic routing or inference is enabled. Account/credential/default-model
 epoch transport, protected fallback configuration, all enqueue/retry/claim gates
 and safe inference adapters remain open.
+
+
+## Protected target configuration boundary (2026-10-19)
+
+ADR-022 adds a versioned nullable execution document and an internal transactional
+ConfigManager for authorized human save/inspection/reveal/removal. It reuses
+upstream env sentinel/ownership logic and activity_log auditing, never inherits
+primary secrets, drops masked credentials when changing runtimes, and returns no
+plaintext after audit/commit failure. Metadata-only writes clear the document.
+900022 contains no FK/index/backfill; existing metadata rows remain incomplete.
+No endpoint/UI/CLI, daemon secret delivery, execution approval or automatic
+routing/probe worker is enabled. Provider/tool/MCP/context validation, runtime
+credential/default-model epochs and all enqueue/retry/claim gates remain required.
