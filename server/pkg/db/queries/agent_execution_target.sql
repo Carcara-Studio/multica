@@ -81,9 +81,9 @@ SELECT child.id, p.agent_id, p.workspace_id, p.runtime_id, p.route,
        p.primary_generation, p.state_version, p.fallback_generation
 FROM agent_task_execution_route p
 JOIN agent_task_queue parent ON parent.id = p.task_id AND parent.agent_id = p.agent_id AND parent.runtime_id = p.runtime_id
-JOIN agent_task_queue child ON child.parent_task_id = parent.id
+JOIN agent_task_queue child ON child.parent_task_id = parent.id AND child.retry_of_task_id = parent.id
 JOIN agent a ON a.id = p.agent_id AND a.workspace_id = p.workspace_id
-WHERE p.task_id = @parent_task_id AND p.workspace_id = @workspace_id
+WHERE p.task_id = @parent_task_id AND p.workspace_id = @workspace_id AND parent.status = 'failed'
   AND child.id = @child_task_id AND child.agent_id = p.agent_id AND child.runtime_id = p.runtime_id
   AND child.status IN ('queued', 'deferred')
 ON CONFLICT (task_id) DO NOTHING

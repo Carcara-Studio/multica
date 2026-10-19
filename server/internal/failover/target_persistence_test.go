@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -186,7 +187,10 @@ func TestExecutionRouteAndTaskRollbackAndRetryInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	child := targetTask(t, f, f.runtime)
-	f.fx.Exec(t, `UPDATE agent_task_queue SET parent_task_id=$1 WHERE id=$2`, parent, child)
+	f.fx.Exec(t, `UPDATE agent_task_queue SET parent_task_id=$1, retry_of_task_id=$1 WHERE id=$2`, parent, child)
+	_, err = f.q.CopyAgentTaskExecutionRouteForRetry(ctx, db.CopyAgentTaskExecutionRouteForRetryParams{ParentTaskID: parent, ChildTaskID: child, WorkspaceID: c.WorkspaceID})
+	wantNoTransition(t, err)
+	f.fx.Exec(t, `UPDATE agent_task_queue SET status='failed', completed_at=now() WHERE id=$1`, parent)
 	if _, err = f.q.DeleteAgentFallbackConfig(ctx, db.DeleteAgentFallbackConfigParams{AgentID: c.AgentID, WorkspaceID: c.WorkspaceID, ExpectedGeneration: c.Generation}); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +202,7 @@ func TestExecutionRouteAndTaskRollbackAndRetryInheritance(t *testing.T) {
 		t.Fatal("retry changed route proof")
 	}
 	wrongRuntime := targetTask(t, f, c.RuntimeID)
-	f.fx.Exec(t, `UPDATE agent_task_queue SET parent_task_id=$1 WHERE id=$2`, parent, wrongRuntime)
+	f.fx.Exec(t, `UPDATE agent_task_queue SET parent_task_id=$1, retry_of_task_id=$1 WHERE id=$2`, parent, wrongRuntime)
 	_, err = f.q.CopyAgentTaskExecutionRouteForRetry(ctx, db.CopyAgentTaskExecutionRouteForRetryParams{ParentTaskID: parent, ChildTaskID: wrongRuntime, WorkspaceID: c.WorkspaceID})
 	wantNoTransition(t, err)
 }
@@ -228,5 +232,31 @@ func TestConcurrentRouteInsertAndSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := recordRoute(ctx, f.q, f, c, targetTask(t, f, f.runtime), "primary")
+	wantNoTransition(t, err)
+}
+
+func TestRouteProofWaitsForStateWriteAndRejectsStaleSelection(t *testing.T) {
+	f, c := newTargetFixture(t)
+	task := targetTask(t, f, f.runtime)
+	tx, err := f.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	if _, err := tx.Exec(t.Context(), `UPDATE agent_failover_state SET version=version+1 WHERE agent_id=$1`, f.row.AgentID); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	_, err = recordRoute(ctx, f.q, f, c, task, "primary")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("route bypassed locked state: %v", err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	_, err = recordRoute(t.Context(), f.q, f, c, task, "primary")
+	wantNoTransition(t, err)
+	_, err = f.q.GetAgentTaskExecutionRoute(t.Context(), db.GetAgentTaskExecutionRouteParams{TaskID: task, WorkspaceID: f.row.WorkspaceID})
 	wantNoTransition(t, err)
 }
