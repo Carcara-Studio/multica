@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -334,7 +335,33 @@ func (h *Handler) UpdateRuntimeProfile(w http.ResponseWriter, r *http.Request) {
 		params.Enabled = pgtype.Bool{Bool: *req.Enabled, Valid: true}
 	}
 
-	profile, err := h.Queries.UpdateRuntimeProfile(r.Context(), params)
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to begin profile update")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+	before, err := qtx.LockRuntimeProfileForDelete(r.Context(), db.LockRuntimeProfileForDeleteParams{ID: profileUUID, WorkspaceID: wsUUID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "runtime profile not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock runtime profile")
+		return
+	}
+	runtimeIDs, err := qtx.ListAgentRuntimeIDsByProfile(r.Context(), db.ListAgentRuntimeIDsByProfileParams{ProfileID: profileUUID, WorkspaceID: wsUUID})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock profile runtimes")
+		return
+	}
+	affected, err := qtx.ListFailoverAgentsByRuntimesForUpdate(r.Context(), db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: wsUUID, RuntimeIds: runtimeIDs})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock profile agents")
+		return
+	}
+	profile, err := qtx.UpdateRuntimeProfile(r.Context(), params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "runtime profile not found")
@@ -349,6 +376,16 @@ func (h *Handler) UpdateRuntimeProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if before.CommandName != profile.CommandName || !bytes.Equal(before.FixedArgs, profile.FixedArgs) || before.Enabled != profile.Enabled || before.Visibility != profile.Visibility {
+		if err := failover.InvalidateAgentPolicies(r.Context(), qtx, affected, !profile.Enabled); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to invalidate profile execution state")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit profile update")
+		return
+	}
 	profileID := uuidToString(profile.ID)
 	h.requestDaemonRuntimeProfileRefresh(wsID, profileID)
 	h.publish(protocol.EventDaemonRegister, wsID, "member", uuidToString(member.UserID), map[string]any{
@@ -532,11 +569,9 @@ func (h *Handler) DeleteRuntimeProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "runtime profile not found")
 		return
 	}
-	for _, runtimeID := range runtimeIDs {
-		if _, err := qtx.ListUserAgentsByRuntimeForUpdate(r.Context(), runtimeID); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to lock profile dependencies")
-			return
-		}
+	if _, err := qtx.ListFailoverAgentsByRuntimesForUpdate(r.Context(), db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: wsUUID, RuntimeIds: runtimeIDs}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock profile dependencies")
+		return
 	}
 
 	// Bounded read: the guard only needs "is there at least one", and the
@@ -614,11 +649,12 @@ func (h *Handler) DeleteRuntimeProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var unboundAgents []db.Agent
+	var affectedAgents, deletedSystemAgents []db.Agent
 	for _, teardown := range teardowns {
-		unboundAgents = append(unboundAgents, teardown.UnboundAgents...)
+		affectedAgents = append(affectedAgents, teardown.FailoverAgents...)
+		deletedSystemAgents = append(deletedSystemAgents, teardown.DeletedSystemAgents...)
 	}
-	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, unboundAgents, true); err != nil {
+	if err := failover.FinalizeRuntimeDeletion(r.Context(), qtx, affectedAgents, deletedSystemAgents); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
 		return
 	}

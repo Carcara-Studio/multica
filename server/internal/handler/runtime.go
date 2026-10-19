@@ -550,13 +550,44 @@ func (h *Handler) UpdateAgentRuntime(w http.ResponseWriter, r *http.Request) {
 	changed := false
 
 	if needVisibility {
-		updated, err := h.Queries.UpdateAgentRuntimeVisibility(r.Context(), db.UpdateAgentRuntimeVisibilityParams{
+		tx, err := h.TxStarter.Begin(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to begin runtime update")
+			return
+		}
+		defer tx.Rollback(r.Context())
+		qtx := h.Queries.WithTx(tx)
+		current, err := qtx.LockAgentRuntime(r.Context(), runtimeUUID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to lock runtime")
+			return
+		}
+		if current.Visibility != newVisibility && !canSetRuntimeVisibility(member, current) {
+			writeError(w, http.StatusForbidden, "only the runtime owner can change its visibility")
+			return
+		}
+		affected, err := qtx.ListFailoverAgentsByRuntimesForUpdate(r.Context(), db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: current.WorkspaceID, RuntimeIds: []pgtype.UUID{runtimeUUID}})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to lock runtime agents")
+			return
+		}
+		updated, err := qtx.UpdateAgentRuntimeVisibility(r.Context(), db.UpdateAgentRuntimeVisibilityParams{
 			ID:         runtimeUUID,
 			Visibility: newVisibility,
 		})
 		if err != nil {
 			slog.Error("UpdateAgentRuntimeVisibility failed", "error", err, "runtime_id", runtimeID)
 			writeError(w, http.StatusInternalServerError, "failed to update runtime")
+			return
+		}
+		if current.Visibility != updated.Visibility {
+			if err := failover.InvalidateAgentPolicies(r.Context(), qtx, affected, false); err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to invalidate runtime execution state")
+				return
+			}
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to commit runtime update")
 			return
 		}
 		rt = updated
@@ -1064,7 +1095,7 @@ func (h *Handler) DeleteAgentRuntime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to lock runtime")
 		return
 	}
-	if _, err := qtx.ListUserAgentsByRuntimeForUpdate(r.Context(), rt.ID); err != nil {
+	if _, err := qtx.ListFailoverAgentsByRuntimesForUpdate(r.Context(), db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: rt.WorkspaceID, RuntimeIds: []pgtype.UUID{rt.ID}}); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lock runtime dependencies")
 		return
 	}
@@ -1111,7 +1142,7 @@ func (h *Handler) DeleteAgentRuntime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete runtime")
 		return
 	}
-	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, teardown.UnboundAgents, true); err != nil {
+	if err := failover.FinalizeRuntimeDeletion(r.Context(), qtx, teardown.FailoverAgents, teardown.DeletedSystemAgents); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
 		return
 	}
@@ -1272,7 +1303,7 @@ func (h *Handler) UnbindAgentsAndDeleteRuntime(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "failed to lock runtime")
 		return
 	}
-	if _, err := qtx.ListUserAgentsByRuntimeForUpdate(r.Context(), rt.ID); err != nil {
+	if _, err := qtx.ListFailoverAgentsByRuntimesForUpdate(r.Context(), db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: rt.WorkspaceID, RuntimeIds: []pgtype.UUID{rt.ID}}); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lock runtime dependencies")
 		return
 	}
@@ -1328,7 +1359,7 @@ func (h *Handler) UnbindAgentsAndDeleteRuntime(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := failover.InvalidateAgentPolicies(r.Context(), qtx, teardown.UnboundAgents, true); err != nil {
+	if err := failover.FinalizeRuntimeDeletion(r.Context(), qtx, teardown.FailoverAgents, teardown.DeletedSystemAgents); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to invalidate agent execution state")
 		return
 	}

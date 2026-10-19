@@ -43,7 +43,12 @@ func InvalidateAgentChange(ctx context.Context, q *db.Queries, before, after db.
 func InvalidateAgentPolicies(ctx context.Context, q *db.Queries, agents []db.Agent, suspend bool) error {
 	ordered := slices.Clone(agents)
 	slices.SortFunc(ordered, func(a, b db.Agent) int { return bytes.Compare(a.ID.Bytes[:], b.ID.Bytes[:]) })
+	var previous pgtype.UUID
 	for _, a := range ordered {
+		if a.ID == previous {
+			continue
+		}
+		previous = a.ID
 		if err := invalidateAgentPolicy(ctx, q, a, suspend); err != nil {
 			return err
 		}
@@ -68,6 +73,29 @@ func invalidateAgentPolicy(ctx context.Context, q *db.Queries, a db.Agent, suspe
 	if suspend && !state.SuspendedAt.Valid {
 		if _, err := q.SuspendAgentFailoverState(ctx, db.SuspendAgentFailoverStateParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID}); err != nil {
 			return fmt.Errorf("suspend Agent failover state: %w", err)
+		}
+	}
+	return nil
+}
+
+// FinalizeRuntimeDeletion is a leaf phase: every runtime/Agent/task mutation
+// must finish first. Deleted runtime references suspend policy, including when
+// only the fallback pointed there. Surviving task route evidence is retained.
+func FinalizeRuntimeDeletion(ctx context.Context, q *db.Queries, affected, deleted []db.Agent) error {
+	if err := DeleteTerminalAgents(ctx, q, deleted); err != nil {
+		return err
+	}
+	return InvalidateAgentPolicies(ctx, q, affected, true)
+}
+
+// DeleteTerminalAgents never runs during archive, config removal or rerouting.
+// Callers have already deleted these Agents in the same owner transaction.
+func DeleteTerminalAgents(ctx context.Context, q *db.Queries, agents []db.Agent) error {
+	ordered := slices.Clone(agents)
+	slices.SortFunc(ordered, func(a, b db.Agent) int { return bytes.Compare(a.ID.Bytes[:], b.ID.Bytes[:]) })
+	for _, a := range ordered {
+		if err := q.DeleteTerminalAgentFailoverData(ctx, db.DeleteTerminalAgentFailoverDataParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID}); err != nil {
+			return fmt.Errorf("delete terminal Agent failover data: %w", err)
 		}
 	}
 	return nil

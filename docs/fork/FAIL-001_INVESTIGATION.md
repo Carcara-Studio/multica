@@ -162,5 +162,19 @@ controls, archive, member revocation and user-Agent runtime teardown to atomic
 optional state invalidation. Default Agents are never initialized. State locks
 are a final leaf after existing owner/chat/task/audit work; single archive commits
 before cancellation. SQL Agent method signatures/public responses are unchanged.
-Legacy runtime consolidation, runtime/profile/account changes and terminal fork
-row cleanup remain separate gates, alongside config/routing/claim/probe enablement.
+Runtime lifecycle and terminal cleanup are extended by ADR-021 below; runtime-local
+account/default-model epochs remain a separate gate, alongside config/routing/claim/probe enablement.
+
+
+## Runtime lifecycle integration (2026-10-19)
+
+ADR-021 adds transactional profile command/args/enable invalidation, runtime
+visibility invalidation, and conservative legacy consolidation suspension. Both
+primary and fallback runtime references participate, including Agents whose
+primary is elsewhere. Runtime/profile teardown and retention GC finalize optional
+policy only after all owner/task writes, deduplicating Agents shared across
+profile instances. Terminal system-Agent and builder-chat deletion explicitly
+prune optional config/state/route rows; ordinary chat deletion preserves policy.
+No automatic routing or inference is enabled. Account/credential/default-model
+epoch transport, protected fallback configuration, all enqueue/retry/claim gates
+and safe inference adapters remain open.

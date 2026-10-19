@@ -513,6 +513,9 @@ func gcRuntime(ctx context.Context, txStarter runtimeGCTxStarter, queries *db.Qu
 	}
 	result.workspaceID = util.UUIDToString(runtime.WorkspaceID)
 
+	if _, err := qtx.ListFailoverAgentsByRuntimesForUpdate(ctx, db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: runtime.WorkspaceID, RuntimeIds: []pgtype.UUID{runtimeID}}); err != nil {
+		return result, fmt.Errorf("lock runtime failover dependencies: %w", err)
+	}
 	lockedAgents, err := qtx.ListUserAgentsByRuntimeForUpdate(ctx, runtimeID)
 	if err != nil {
 		return result, fmt.Errorf("lock runtime agents: %w", err)
@@ -569,7 +572,7 @@ func gcRuntime(ctx context.Context, txStarter runtimeGCTxStarter, queries *db.Qu
 	if err := qtx.DeleteAgentRuntime(ctx, runtimeID); err != nil {
 		return result, fmt.Errorf("delete runtime: %w", err)
 	}
-	if err := failover.InvalidateAgentPolicies(ctx, qtx, teardown.UnboundAgents, true); err != nil {
+	if err := failover.FinalizeRuntimeDeletion(ctx, qtx, teardown.FailoverAgents, teardown.DeletedSystemAgents); err != nil {
 		return result, fmt.Errorf("invalidate Agent failover policy: %w", err)
 	}
 

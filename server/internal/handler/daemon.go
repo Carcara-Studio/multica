@@ -23,6 +23,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/daemonws"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/integrations/slack"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
 	"github.com/multica-ai/multica/server/internal/logger"
@@ -857,6 +858,15 @@ func (h *Handler) mergeLegacyRuntime(ctx context.Context, newRuntimeID, oldRunti
 		return errRuntimeMergeFenced
 	}
 
+	oldRuntime, err := qtx.GetAgentRuntime(ctx, oldRuntimeID)
+	if err != nil {
+		return fmt.Errorf("read old runtime: %w", err)
+	}
+	affectedAgents, err := qtx.ListFailoverAgentsByRuntimesForUpdate(ctx, db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: oldRuntime.WorkspaceID, RuntimeIds: []pgtype.UUID{oldRuntimeID}})
+	if err != nil {
+		return fmt.Errorf("lock reassigned Agent policies: %w", err)
+	}
+
 	reassignment, err := qtx.ReassignTasksToRuntime(ctx, db.ReassignTasksToRuntimeParams{
 		NewRuntimeID: newRuntimeID,
 		OldRuntimeID: oldRuntimeID,
@@ -889,6 +899,9 @@ func (h *Handler) mergeLegacyRuntime(ctx context.Context, newRuntimeID, oldRunti
 		return fmt.Errorf("delete old runtime: %w", err)
 	}
 
+	if err := failover.InvalidateAgentPolicies(ctx, qtx, affectedAgents, true); err != nil {
+		return fmt.Errorf("invalidate reassigned Agent policies: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit merge: %w", err)
 	}

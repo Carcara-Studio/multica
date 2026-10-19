@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/events"
+	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/middleware"
@@ -718,7 +719,8 @@ func (h *Handler) DeleteChatSession(w http.ResponseWriter, r *http.Request) {
 	// Claim, clear, prioritize, and direct send all lock the agent before task
 	// rows. Keep delete on the same agent -> task suffix after its session lock,
 	// otherwise a builder-agent delete can deadlock with a concurrent claim.
-	if _, err := qtx.GetAgentForClaimUpdate(r.Context(), session.AgentID); err != nil {
+	deletedAgent, err := qtx.GetAgentForClaimUpdate(r.Context(), session.AgentID)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lock chat agent")
 		return
 	}
@@ -787,6 +789,10 @@ func (h *Handler) DeleteChatSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := failover.DeleteTerminalAgents(r.Context(), qtx, []db.Agent{deletedAgent}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to clean up agent execution state")
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		slog.Warn("commit chat session delete failed", "session_id", sessionID, "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to commit chat session delete")

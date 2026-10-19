@@ -43,9 +43,11 @@ type RuntimeTeardownOptions struct {
 // RuntimeTeardownResult reports committed business-object changes so callers
 // can publish events after their transaction commits.
 type RuntimeTeardownResult struct {
-	UnboundAgents    []db.Agent
-	CancelledTasks   []db.AgentTaskQueue
-	PausedAutopilots []db.Autopilot
+	UnboundAgents       []db.Agent
+	FailoverAgents      []db.Agent
+	DeletedSystemAgents []db.Agent
+	CancelledTasks      []db.AgentTaskQueue
+	PausedAutopilots    []db.Autopilot
 }
 
 // ValidateRuntimeAgentWorkspaces refuses to mutate cross-workspace bindings.
@@ -77,6 +79,15 @@ func TeardownRuntime(ctx context.Context, qtx *db.Queries, runtimeID pgtype.UUID
 	if err != nil {
 		return out, fmt.Errorf("load runtime: %w", err)
 	}
+	out.FailoverAgents, err = qtx.ListFailoverAgentsByRuntimesForUpdate(ctx, db.ListFailoverAgentsByRuntimesForUpdateParams{WorkspaceID: runtime.WorkspaceID, RuntimeIds: []pgtype.UUID{runtimeID}})
+	if err != nil {
+		return out, fmt.Errorf("lock runtime failover dependencies: %w", err)
+	}
+	out.DeletedSystemAgents, err = qtx.ListRuntimeSystemAgentsForFailoverCleanup(ctx, runtimeID)
+	if err != nil {
+		return out, fmt.Errorf("capture system agents: %w", err)
+	}
+
 	lockedAgents, err := qtx.ListUserAgentsByRuntimeForUpdate(ctx, runtimeID)
 	if err != nil {
 		return out, fmt.Errorf("lock runtime agents: %w", err)
