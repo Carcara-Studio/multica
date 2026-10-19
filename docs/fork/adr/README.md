@@ -186,6 +186,7 @@ ADR-020 — Atomic Agent mutation and failover invalidation
 ADR-021 — Runtime lifecycle invalidation and terminal cleanup
 ADR-022 — Protected target configuration boundary
 ADR-023 — Target-scoped evidence and immutable route resolution
+ADR-024 — Server-owned live RPC connection identity
 ```
 
 ### Governance
