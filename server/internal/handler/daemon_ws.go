@@ -37,6 +37,7 @@ func (h *Handler) buildDaemonWebSocketIdentity(w http.ResponseWriter, r *http.Re
 	identity := daemonws.ClientIdentity{
 		DaemonID:      middleware.DaemonIDFromContext(r.Context()),
 		UserID:        userID,
+		HumanActor:    daemonWebSocketHumanActor(r),
 		RuntimeIDs:    runtimeIDs,
 		RuntimeLeases: make(map[string]*daemonws.RuntimeLease, len(runtimeIDs)),
 		ClientVersion: r.Header.Get("X-Client-Version"),
@@ -99,6 +100,11 @@ func (h *Handler) buildDaemonWebSocketIdentity(w http.ResponseWriter, r *http.Re
 	identity.WorkspaceID = primaryWorkspaceID
 	identity.WorkspaceIDs = workspaceIDs
 	return identity, true
+}
+
+func daemonWebSocketHumanActor(r *http.Request) bool {
+	path := middleware.DaemonAuthPathFromContext(r.Context())
+	return (path == middleware.DaemonAuthPathPAT || path == middleware.DaemonAuthPathJWT) && !isMachineCredentialActor(r)
 }
 
 func parseRuntimeIDs(r *http.Request) []string {
