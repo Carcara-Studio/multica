@@ -22,6 +22,8 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"activity_log":                       workspaceDelete,
 	"agent":                              workspaceDelete,
 	"agent_builder_draft":                workspaceDelete,
+	"agent_fallback_config":              workspaceDelete,
+	"agent_task_execution_route":         workspaceDelete,
 	"agent_failover_state":               workspaceDelete,
 	"agent_invocation_target":            workspaceDelete,
 	"agent_runtime":                      workspaceDelete,

@@ -132,3 +132,15 @@ selected daemon/agent Cursor supplement/model-resolution tests passed with Go
 1.26.9. The evidence gate has its own positive/negative and canonical-reason
 matrix. Full DB/concurrency/migration verification belongs to subsequent
 stateful increments and CI; no skipped DB test is counted as a pass.
+
+## Optional target and task proof persistence (2026-10-19)
+
+Fork baseline `3efc8afd7`, synchronized through upstream `e752b971b`. ADR-018
+refines ADR-007: primary tasks of fallback-enabled Agents also require immutable
+enqueue proof, avoiding stale primary failures after recovery. Migrations
+900013–900021 add optional secret-free target metadata and route proofs; sqlc
+operations remain internal and unused by production task/config flows. Workspace
+cleanup is integrated. Model/provider capability validation, target-specific
+overrides, protected secret handling, all enqueue/claim/lifecycle integrations
+and safe primary inference adapters remain required. This is a persistence
+increment, not an enabled fallback feature.

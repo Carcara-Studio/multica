@@ -1,0 +1,1 @@
+ALTER TABLE agent_task_execution_route ADD CONSTRAINT agent_task_execution_route_pkey PRIMARY KEY USING INDEX agent_task_execution_route_task_idx;

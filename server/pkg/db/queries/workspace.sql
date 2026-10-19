@@ -245,6 +245,12 @@ cleared_project_agent_memberships AS (
     -- lock, so remove these rows explicitly before the owner row disappears.
     DELETE FROM project_agent_membership WHERE workspace_id = $1
 ),
+cleared_agent_fallback_config AS (
+    DELETE FROM agent_fallback_config WHERE workspace_id = $1
+),
+cleared_agent_task_execution_routes AS (
+    DELETE FROM agent_task_execution_route WHERE workspace_id = $1
+),
 cleared_agent_failover_state AS (
     DELETE FROM agent_failover_state WHERE workspace_id = $1
 )
