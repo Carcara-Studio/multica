@@ -191,3 +191,17 @@ plaintext after audit/commit failure. Metadata-only writes clear the document.
 No endpoint/UI/CLI, daemon secret delivery, execution approval or automatic
 routing/probe worker is enabled. Provider/tool/MCP/context validation, runtime
 credential/default-model epochs and all enqueue/retry/claim gates remain required.
+
+
+## Target evidence and resolution (2026-10-19)
+
+ADR-023 implements a pure verifier bound to target generations, authenticated
+runtime connection and target-specific credential/config epochs. Its production
+factory approves no adapters, so neither saved config nor daemon feature claims
+can grant readiness. Task/probe guarantees are separate and no evidence marks
+primary healthy. Internal enqueue/queued-target helpers isolate fallback fields,
+keep shared identity, preserve persisted routes through availability changes,
+reject stale generations and require fresh opt-in sessions pending a scoped
+session ledger. No production writers/claims/worker/transport or public API/UI
+are wired. Real adapter/epoch tracking, ledger/transport, complete context/tool
+compatibility and all writer/retry/claim/quota/probe integration remain required.
