@@ -20,6 +20,7 @@ func TestExecutionTargetMigrationsUpDownUp(t *testing.T) {
 		"900017_agent_fallback_config_runtime_idx", "900018_agent_task_execution_route",
 		"900019_agent_task_execution_route_task_idx", "900020_agent_task_execution_route_primary_key",
 		"900021_agent_task_execution_route_workspace_agent_idx",
+		"900022_agent_fallback_execution_config",
 	}
 	run := func(direction string, selected []string) {
 		t.Helper()
@@ -93,4 +94,17 @@ func TestExecutionTargetMigrationsUpDownUp(t *testing.T) {
 		_, err := pool.Exec(context.Background(), sql)
 		assertPostgresCode(t, err, "23514", sql)
 	}
+	var id string
+	var raw []byte
+	if err := pool.QueryRow(ctx, `INSERT INTO agent_fallback_config(agent_id,workspace_id,runtime_id,generation) SELECT gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid() RETURNING agent_id::text,execution_config`).Scan(&id, &raw); err != nil || len(raw) != 0 {
+		t.Fatal("metadata row acquired implicit execution overrides", err)
+	}
+	for _, doc := range []string{`[]`, `{"version":0}`, `{"version":2}`, `{}`} {
+		_, err := pool.Exec(ctx, `UPDATE agent_fallback_config SET execution_config=$1::jsonb WHERE agent_id=$2`, doc, id)
+		assertPostgresCode(t, err, "23514", "invalid execution_config version/shape")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE agent_fallback_config SET execution_config='{"version":1,"custom_env":{},"custom_args":[],"runtime_config":{},"mcp_config":null}' WHERE agent_id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/multica-ai/multica/server/internal/agentsecrets"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -43,7 +44,7 @@ func TestCanManageAgentEnv_Pure(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			member := db.Member{UserID: util.MustParseUUID(tc.userID), Role: tc.role}
-			if got := canManageAgentEnv(tc.agent, member); got != tc.want {
+			if got := agentsecrets.CanManage(tc.agent, member); got != tc.want {
 				t.Fatalf("canManageAgentEnv(owner=%q, user=%s, role=%s) = %v; want %v",
 					uuidToString(tc.agent.OwnerID), tc.userID, tc.role, got, tc.want)
 			}

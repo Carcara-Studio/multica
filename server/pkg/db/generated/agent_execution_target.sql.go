@@ -56,7 +56,7 @@ func (q *Queries) CopyAgentTaskExecutionRouteForRetry(ctx context.Context, arg C
 
 const deleteAgentFallbackConfig = `-- name: DeleteAgentFallbackConfig :execrows
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at FROM agent_fallback_config c
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
     WHERE c.agent_id = $1 AND c.workspace_id = $2 AND c.generation = $3
     FOR UPDATE
 ), availability AS MATERIALIZED (
@@ -124,7 +124,7 @@ func (q *Queries) DeleteAgentTaskExecutionRoutes(ctx context.Context, arg Delete
 }
 
 const getAgentFallbackConfig = `-- name: GetAgentFallbackConfig :one
-SELECT agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, created_at, updated_at FROM agent_fallback_config WHERE agent_id = $1 AND workspace_id = $2
+SELECT agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, created_at, updated_at, execution_config FROM agent_fallback_config WHERE agent_id = $1 AND workspace_id = $2
 `
 
 type GetAgentFallbackConfigParams struct {
@@ -145,6 +145,7 @@ func (q *Queries) GetAgentFallbackConfig(ctx context.Context, arg GetAgentFallba
 		&i.ServiceTier,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExecutionConfig,
 	)
 	return i, err
 }
@@ -178,24 +179,25 @@ func (q *Queries) GetAgentTaskExecutionRoute(ctx context.Context, arg GetAgentTa
 const initializeAgentFallbackConfig = `-- name: InitializeAgentFallbackConfig :one
 
 INSERT INTO agent_fallback_config
-    (agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier)
-SELECT a.id, a.workspace_id, r.id, $1, $2, $3, $4
+    (agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, execution_config)
+SELECT a.id, a.workspace_id, r.id, $1, $2, $3, $4, $5::jsonb
 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
-WHERE a.id = $5 AND a.workspace_id = $6
-  AND a.kind = 'user' AND a.archived_at IS NULL AND r.id = $7
+WHERE a.id = $6 AND a.workspace_id = $7
+  AND a.kind = 'user' AND a.archived_at IS NULL AND r.id = $8
   AND (r.visibility = 'public' OR (r.visibility = 'private' AND r.owner_id = a.owner_id))
 ON CONFLICT (agent_id) DO NOTHING
-RETURNING agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, created_at, updated_at
+RETURNING agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, created_at, updated_at, execution_config
 `
 
 type InitializeAgentFallbackConfigParams struct {
-	Generation    pgtype.UUID `json:"generation"`
-	Model         string      `json:"model"`
-	ThinkingLevel string      `json:"thinking_level"`
-	ServiceTier   string      `json:"service_tier"`
-	AgentID       pgtype.UUID `json:"agent_id"`
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	RuntimeID     pgtype.UUID `json:"runtime_id"`
+	Generation      pgtype.UUID `json:"generation"`
+	Model           string      `json:"model"`
+	ThinkingLevel   string      `json:"thinking_level"`
+	ServiceTier     string      `json:"service_tier"`
+	ExecutionConfig []byte      `json:"execution_config"`
+	AgentID         pgtype.UUID `json:"agent_id"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	RuntimeID       pgtype.UUID `json:"runtime_id"`
 }
 
 // Internal persistence only. Callers must authorize management, lock current
@@ -207,6 +209,7 @@ func (q *Queries) InitializeAgentFallbackConfig(ctx context.Context, arg Initial
 		arg.Model,
 		arg.ThinkingLevel,
 		arg.ServiceTier,
+		arg.ExecutionConfig,
 		arg.AgentID,
 		arg.WorkspaceID,
 		arg.RuntimeID,
@@ -222,13 +225,14 @@ func (q *Queries) InitializeAgentFallbackConfig(ctx context.Context, arg Initial
 		&i.ServiceTier,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExecutionConfig,
 	)
 	return i, err
 }
 
 const recordAgentTaskExecutionRoute = `-- name: RecordAgentTaskExecutionRoute :one
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at FROM agent_fallback_config c
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
     WHERE c.agent_id = $3 AND c.workspace_id = $4
       AND c.generation = $5
     FOR SHARE
@@ -293,11 +297,42 @@ func (q *Queries) RecordAgentTaskExecutionRoute(ctx context.Context, arg RecordA
 	return i, err
 }
 
+const tryLockExecutionTargetRuntimesForShare = `-- name: TryLockExecutionTargetRuntimesForShare :many
+SELECT id FROM agent_runtime
+WHERE id = ANY($1::uuid[])
+ORDER BY id
+FOR SHARE NOWAIT
+`
+
+// Stabilize owner/visibility/provider metadata against updates and teardown,
+// while remaining compatible with upstream FK/task-owner KEY SHARE locks.
+// Caller owns Agent first. NOWAIT avoids a blocking Agent -> runtime edge
+// against runtime teardown/metadata writers that lock runtime before Agent.
+func (q *Queries) TryLockExecutionTargetRuntimesForShare(ctx context.Context, runtimeIds []pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, tryLockExecutionTargetRuntimesForShare, runtimeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAgentFallbackConfig = `-- name: UpdateAgentFallbackConfig :one
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at FROM agent_fallback_config c
-    WHERE c.agent_id = $6 AND c.workspace_id = $7
-      AND c.generation = $8 AND c.generation <> $2
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
+    WHERE c.agent_id = $7 AND c.workspace_id = $8
+      AND c.generation = $9 AND c.generation <> $2
       AND EXISTS (SELECT 1 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
           WHERE a.id = c.agent_id AND a.workspace_id = c.workspace_id AND a.kind = 'user'
             AND a.archived_at IS NULL AND r.id = $1
@@ -306,12 +341,12 @@ WITH config AS MATERIALIZED (
 ), availability AS MATERIALIZED (
     SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s, config c
     WHERE s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
-      AND s.primary_generation = $9
-      AND s.primary_generation <> $10 AND s.version = $11
+      AND s.primary_generation = $10
+      AND s.primary_generation <> $11 AND s.version = $12
     FOR UPDATE OF s
 ), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM availability), rotated AS (
     UPDATE agent_failover_state s
-    SET primary_generation = $10, version = s.version + 1,
+    SET primary_generation = $11, version = s.version + 1,
         state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
         next_probe_at = CASE WHEN s.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
         probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
@@ -322,9 +357,10 @@ WITH config AS MATERIALIZED (
 UPDATE agent_fallback_config c
 SET runtime_id = $1, generation = $2,
     model = $3, thinking_level = $4, service_tier = $5,
+    execution_config = $6::jsonb,
     updated_at = stamp.at
 FROM rotated, stamp WHERE c.agent_id = rotated.agent_id
-RETURNING c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at
+RETURNING c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config
 `
 
 type UpdateAgentFallbackConfigParams struct {
@@ -333,6 +369,7 @@ type UpdateAgentFallbackConfigParams struct {
 	Model                     string      `json:"model"`
 	ThinkingLevel             string      `json:"thinking_level"`
 	ServiceTier               string      `json:"service_tier"`
+	ExecutionConfig           []byte      `json:"execution_config"`
 	AgentID                   pgtype.UUID `json:"agent_id"`
 	WorkspaceID               pgtype.UUID `json:"workspace_id"`
 	ExpectedGeneration        pgtype.UUID `json:"expected_generation"`
@@ -350,6 +387,7 @@ func (q *Queries) UpdateAgentFallbackConfig(ctx context.Context, arg UpdateAgent
 		arg.Model,
 		arg.ThinkingLevel,
 		arg.ServiceTier,
+		arg.ExecutionConfig,
 		arg.AgentID,
 		arg.WorkspaceID,
 		arg.ExpectedGeneration,
@@ -368,6 +406,7 @@ func (q *Queries) UpdateAgentFallbackConfig(ctx context.Context, arg UpdateAgent
 		&i.ServiceTier,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ExecutionConfig,
 	)
 	return i, err
 }

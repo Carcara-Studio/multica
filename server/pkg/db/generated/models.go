@@ -85,15 +85,16 @@ type AgentFailoverState struct {
 }
 
 type AgentFallbackConfig struct {
-	AgentID       pgtype.UUID        `json:"agent_id"`
-	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
-	RuntimeID     pgtype.UUID        `json:"runtime_id"`
-	Generation    pgtype.UUID        `json:"generation"`
-	Model         string             `json:"model"`
-	ThinkingLevel string             `json:"thinking_level"`
-	ServiceTier   string             `json:"service_tier"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	AgentID         pgtype.UUID        `json:"agent_id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	RuntimeID       pgtype.UUID        `json:"runtime_id"`
+	Generation      pgtype.UUID        `json:"generation"`
+	Model           string             `json:"model"`
+	ThinkingLevel   string             `json:"thinking_level"`
+	ServiceTier     string             `json:"service_tier"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ExecutionConfig []byte             `json:"execution_config"`
 }
 
 // Allow-list of who may invoke a public_to agent (MUL-3963). One row per (agent, target_type, target); targets stack and canInvokeAgent OR-matches. workspace rows store the agent workspace_id in target_id; member rows store the user id; team rows are reserved and inert in V1. Rows only matter when agent.permission_mode = public_to. No DB foreign keys: agent_id / created_by / member target_id relationships are maintained in the application layer (see migration comment).

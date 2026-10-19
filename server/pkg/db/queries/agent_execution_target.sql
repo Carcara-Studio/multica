@@ -4,8 +4,8 @@
 
 -- name: InitializeAgentFallbackConfig :one
 INSERT INTO agent_fallback_config
-    (agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier)
-SELECT a.id, a.workspace_id, r.id, @generation, @model, @thinking_level, @service_tier
+    (agent_id, workspace_id, runtime_id, generation, model, thinking_level, service_tier, execution_config)
+SELECT a.id, a.workspace_id, r.id, @generation, @model, @thinking_level, @service_tier, sqlc.narg(execution_config)::jsonb
 FROM agent a JOIN agent_runtime r ON r.workspace_id = a.workspace_id
 WHERE a.id = @agent_id AND a.workspace_id = @workspace_id
   AND a.kind = 'user' AND a.archived_at IS NULL AND r.id = @runtime_id
@@ -47,6 +47,7 @@ WITH config AS MATERIALIZED (
 UPDATE agent_fallback_config c
 SET runtime_id = @runtime_id, generation = @new_generation,
     model = @model, thinking_level = @thinking_level, service_tier = @service_tier,
+    execution_config = sqlc.narg(execution_config)::jsonb,
     updated_at = stamp.at
 FROM rotated, stamp WHERE c.agent_id = rotated.agent_id
 RETURNING c.*;
@@ -133,3 +134,13 @@ RETURNING *;
 -- name: DeleteAgentTaskExecutionRoutes :execrows
 -- Terminal lifecycle cleanup only; never remove proof to reroute queued work.
 DELETE FROM agent_task_execution_route WHERE workspace_id = @workspace_id AND agent_id = @agent_id;
+
+-- name: TryLockExecutionTargetRuntimesForShare :many
+-- Stabilize owner/visibility/provider metadata against updates and teardown,
+-- while remaining compatible with upstream FK/task-owner KEY SHARE locks.
+-- Caller owns Agent first. NOWAIT avoids a blocking Agent -> runtime edge
+-- against runtime teardown/metadata writers that lock runtime before Agent.
+SELECT id FROM agent_runtime
+WHERE id = ANY(@runtime_ids::uuid[])
+ORDER BY id
+FOR SHARE NOWAIT;
