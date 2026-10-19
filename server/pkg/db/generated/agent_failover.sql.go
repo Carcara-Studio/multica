@@ -13,7 +13,7 @@ import (
 
 const activateAgentFallbackState = `-- name: ActivateAgentFallbackState :one
 WITH locked AS (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s
     WHERE s.agent_id = $1 AND s.workspace_id = $2
       AND s.primary_generation = $3 AND s.version = $4
       AND s.state = 'primary_active' AND s.suspended_at IS NULL
@@ -32,7 +32,7 @@ SET state = 'fallback_active', version = f.version + 1,
 FROM locked, stamp, failure WHERE f.agent_id = locked.agent_id AND failure.completed_at <= stamp.at
   AND EXISTS (SELECT 1 FROM agent a WHERE a.id = f.agent_id
       AND a.workspace_id = f.workspace_id AND a.archived_at IS NULL)
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type ActivateAgentFallbackStateParams struct {
@@ -73,6 +73,10 @@ func (q *Queries) ActivateAgentFallbackState(ctx context.Context, arg ActivateAg
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
@@ -96,7 +100,7 @@ SET state = 'primary_probing', version = version + 1,
     updated_at = stamp.at
 FROM candidate, stamp
 WHERE f.agent_id = candidate.agent_id
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type ClaimDueAgentPrimaryProbeParams struct {
@@ -128,6 +132,10 @@ func (q *Queries) ClaimDueAgentPrimaryProbe(ctx context.Context, arg ClaimDueAge
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
@@ -207,7 +215,7 @@ SET state = 'fallback_active', version = version + 1,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
     updated_at = stamp.at
 FROM expired, stamp WHERE f.agent_id = expired.agent_id
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 func (q *Queries) ExpireAgentPrimaryProbeLeases(ctx context.Context) ([]AgentFailoverState, error) {
@@ -238,6 +246,10 @@ func (q *Queries) ExpireAgentPrimaryProbeLeases(ctx context.Context) ([]AgentFai
 			&i.SuspendedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EvidenceContext,
+			&i.EvidenceToken,
+			&i.EvidenceIssuedAt,
+			&i.EvidenceExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -250,7 +262,7 @@ func (q *Queries) ExpireAgentPrimaryProbeLeases(ctx context.Context) ([]AgentFai
 }
 
 const getAgentFailoverState = `-- name: GetAgentFailoverState :one
-SELECT agent_id, workspace_id, primary_generation, state, version, primary_failed_at, primary_failure_task_id, next_probe_at, last_probe_at, last_probe_reason, recovered_at, probe_token, probe_runtime_id, probe_lease_until, probe_dispatched_at, suspended_at, created_at, updated_at FROM agent_failover_state
+SELECT agent_id, workspace_id, primary_generation, state, version, primary_failed_at, primary_failure_task_id, next_probe_at, last_probe_at, last_probe_reason, recovered_at, probe_token, probe_runtime_id, probe_lease_until, probe_dispatched_at, suspended_at, created_at, updated_at, evidence_context, evidence_token, evidence_issued_at, evidence_expires_at FROM agent_failover_state
 WHERE agent_id = $1 AND workspace_id = $2
 `
 
@@ -281,6 +293,10 @@ func (q *Queries) GetAgentFailoverState(ctx context.Context, arg GetAgentFailove
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
@@ -292,7 +308,7 @@ SELECT a.id, a.workspace_id, $1::uuid
 FROM agent a
 WHERE a.id = $2 AND a.workspace_id = $3 AND a.archived_at IS NULL
 ON CONFLICT (agent_id) DO NOTHING
-RETURNING agent_id, workspace_id, primary_generation, state, version, primary_failed_at, primary_failure_task_id, next_probe_at, last_probe_at, last_probe_reason, recovered_at, probe_token, probe_runtime_id, probe_lease_until, probe_dispatched_at, suspended_at, created_at, updated_at
+RETURNING agent_id, workspace_id, primary_generation, state, version, primary_failed_at, primary_failure_task_id, next_probe_at, last_probe_at, last_probe_reason, recovered_at, probe_token, probe_runtime_id, probe_lease_until, probe_dispatched_at, suspended_at, created_at, updated_at, evidence_context, evidence_token, evidence_issued_at, evidence_expires_at
 `
 
 type InitializeAgentFailoverStateParams struct {
@@ -326,6 +342,10 @@ func (q *Queries) InitializeAgentFailoverState(ctx context.Context, arg Initiali
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
@@ -457,7 +477,7 @@ func (q *Queries) ListRuntimeSystemAgentsForFailoverCleanup(ctx context.Context,
 
 const markAgentPrimaryProbeDispatched = `-- name: MarkAgentPrimaryProbeDispatched :one
 WITH locked AS (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s
     WHERE s.agent_id = $2 AND s.workspace_id = $3
       AND s.primary_generation = $4 AND s.probe_token = $5
       AND s.probe_runtime_id = $1
@@ -471,7 +491,7 @@ WHERE f.agent_id = locked.agent_id AND locked.probe_lease_until > stamp.at
   AND EXISTS (SELECT 1 FROM agent a WHERE a.id = f.agent_id
       AND a.workspace_id = f.workspace_id AND a.runtime_id = $1
       AND a.archived_at IS NULL)
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type MarkAgentPrimaryProbeDispatchedParams struct {
@@ -510,13 +530,17 @@ func (q *Queries) MarkAgentPrimaryProbeDispatched(ctx context.Context, arg MarkA
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
 
 const rotateAgentFailoverGeneration = `-- name: RotateAgentFailoverGeneration :one
 WITH locked AS (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s
     WHERE s.agent_id = $2 AND s.workspace_id = $3
       AND s.primary_generation = $4 AND s.primary_generation <> $1
     FOR UPDATE
@@ -526,9 +550,10 @@ SET primary_generation = $1, version = f.version + 1,
     state = CASE WHEN f.state = 'primary_probing' THEN 'fallback_active' ELSE f.state END,
     next_probe_at = CASE WHEN f.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+    evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
     updated_at = stamp.at
 FROM locked, stamp WHERE f.agent_id = locked.agent_id
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type RotateAgentFailoverGenerationParams struct {
@@ -566,13 +591,17 @@ func (q *Queries) RotateAgentFailoverGeneration(ctx context.Context, arg RotateA
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
 
 const settleAgentPrimaryProbe = `-- name: SettleAgentPrimaryProbe :one
 WITH locked AS (
-    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at FROM agent_failover_state s
+    SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s
     WHERE s.agent_id = $3 AND s.workspace_id = $4
       AND s.primary_generation = $5 AND s.probe_token = $6
       AND s.probe_runtime_id = $2
@@ -592,7 +621,7 @@ WHERE f.agent_id = locked.agent_id AND locked.probe_lease_until > stamp.at
   AND EXISTS (SELECT 1 FROM agent a WHERE a.id = f.agent_id
       AND a.workspace_id = f.workspace_id AND a.runtime_id = $2
       AND a.archived_at IS NULL)
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type SettleAgentPrimaryProbeParams struct {
@@ -635,6 +664,10 @@ func (q *Queries) SettleAgentPrimaryProbe(ctx context.Context, arg SettleAgentPr
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }
@@ -645,9 +678,10 @@ SET suspended_at = clock_timestamp(), version = version + 1,
     state = CASE WHEN state = 'primary_probing' THEN 'fallback_active' ELSE state END,
     next_probe_at = CASE WHEN state = 'primary_probing' THEN clock_timestamp() + interval '30 minutes' ELSE next_probe_at END,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+    evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
     updated_at = clock_timestamp()
 WHERE f.agent_id = $1 AND f.workspace_id = $2 AND f.suspended_at IS NULL
-RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at
+RETURNING f.agent_id, f.workspace_id, f.primary_generation, f.state, f.version, f.primary_failed_at, f.primary_failure_task_id, f.next_probe_at, f.last_probe_at, f.last_probe_reason, f.recovered_at, f.probe_token, f.probe_runtime_id, f.probe_lease_until, f.probe_dispatched_at, f.suspended_at, f.created_at, f.updated_at, f.evidence_context, f.evidence_token, f.evidence_issued_at, f.evidence_expires_at
 `
 
 type SuspendAgentFailoverStateParams struct {
@@ -677,6 +711,10 @@ func (q *Queries) SuspendAgentFailoverState(ctx context.Context, arg SuspendAgen
 		&i.SuspendedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EvidenceContext,
+		&i.EvidenceToken,
+		&i.EvidenceIssuedAt,
+		&i.EvidenceExpiresAt,
 	)
 	return i, err
 }

@@ -40,6 +40,7 @@ WITH config AS MATERIALIZED (
         state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
         next_probe_at = CASE WHEN s.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
         probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
         updated_at = stamp.at
     FROM availability a, stamp WHERE s.agent_id = a.agent_id
     RETURNING s.agent_id
@@ -72,6 +73,7 @@ WITH config AS MATERIALIZED (
         state = CASE WHEN s.state = 'primary_probing' THEN 'fallback_active' ELSE s.state END,
         next_probe_at = CASE WHEN s.state = 'primary_probing' THEN stamp.at + interval '30 minutes' ELSE s.next_probe_at END,
         probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+        evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
         updated_at = stamp.at
     FROM availability a, stamp WHERE s.agent_id = a.agent_id
     RETURNING s.agent_id

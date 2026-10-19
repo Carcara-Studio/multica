@@ -82,6 +82,10 @@ type AgentFailoverState struct {
 	SuspendedAt          pgtype.Timestamptz `json:"suspended_at"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	EvidenceContext      []byte             `json:"evidence_context"`
+	EvidenceToken        pgtype.UUID        `json:"evidence_token"`
+	EvidenceIssuedAt     pgtype.Timestamptz `json:"evidence_issued_at"`
+	EvidenceExpiresAt    pgtype.Timestamptz `json:"evidence_expires_at"`
 }
 
 type AgentFallbackConfig struct {

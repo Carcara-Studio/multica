@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestProfileEditsFencePrimaryAndFallbackReferences(t *testing.T) {
 			}{{id, old}, {other, otherOld}} {
 				if tc.changed {
 					assertMutationFenced(t, pair.id, pair.s, tc.suspended)
-				} else if mutationState(t, pair.id) != pair.s {
+				} else if !reflect.DeepEqual(mutationState(t, pair.id), pair.s) {
 					t.Fatal("cosmetic/no-op profile edit changed availability")
 				}
 			}
@@ -64,7 +65,7 @@ func TestProfileInvalidationFailureRollsBackExecutionSettings(t *testing.T) {
 	req := withURLParams(newRequest(http.MethodPatch, "/", map[string]any{"command_name": "changed-wrapper"}), "id", testWorkspaceID, "profileId", profile)
 	testutil.Call(t, testHandler.UpdateRuntimeProfile, req).Want(http.StatusInternalServerError)
 	p, err := testHandler.Queries.GetRuntimeProfile(t.Context(), parseUUID(profile))
-	if err != nil || p.CommandName != "claude" || mutationState(t, id) != old {
+	if err != nil || p.CommandName != "claude" || !reflect.DeepEqual(mutationState(t, id), old) {
 		t.Fatalf("profile mutation escaped rollback: %v", err)
 	}
 }
@@ -85,7 +86,7 @@ func TestLegacyMergeFencesOldProbeAndRollsBackOnInvalidationFailure(t *testing.T
 					t.Fatal("expected failed invalidation")
 				}
 				a, e := testHandler.Queries.GetAgent(t.Context(), parseUUID(id))
-				if e != nil || a.RuntimeID != parseUUID(oldRuntime) || mutationState(t, id) != old {
+				if e != nil || a.RuntimeID != parseUUID(oldRuntime) || !reflect.DeepEqual(mutationState(t, id), old) {
 					t.Fatal("merge escaped rollback")
 				}
 				if !rowExists(t, "agent_runtime", oldRuntime) {
@@ -142,7 +143,7 @@ func TestTerminalCleanupRequiresDeletedOwnerAndRemovesAllForkRows(t *testing.T) 
 	if err := testHandler.Queries.DeleteTerminalAgentFailoverData(t.Context(), args); err != nil {
 		t.Fatal(err)
 	}
-	if mutationState(t, id) != old {
+	if !reflect.DeepEqual(mutationState(t, id), old) {
 		t.Fatal("cleanup removed surviving owner's policy")
 	}
 	fx.Exec(t, "UPDATE agent SET kind='system', system_key='agent_builder:test' WHERE id=$1", id)
@@ -169,7 +170,7 @@ func TestChatDeletionOnlyCleansTerminalBuilderPolicy(t *testing.T) {
 			req = withChatTestWorkspaceCtx(t, req)
 			testutil.Call(t, testHandler.DeleteChatSession, req).Want(http.StatusNoContent)
 			if !builder {
-				if mutationState(t, id) != old {
+				if !reflect.DeepEqual(mutationState(t, id), old) {
 					t.Fatal("ordinary chat deletion changed policy")
 				}
 				return
@@ -207,7 +208,7 @@ func TestRuntimeVisibilityInvalidatesPolicyAtomically(t *testing.T) {
 			testutil.Call(t, testHandler.UpdateAgentRuntime, req).Want(status)
 			if kind == "visibility" {
 				assertMutationFenced(t, id, old, false)
-			} else if mutationState(t, id) != old {
+			} else if !reflect.DeepEqual(mutationState(t, id), old) {
 				t.Fatal("cosmetic/no-op/failed visibility update changed policy")
 			}
 			if kind == "rollback" {
@@ -243,7 +244,7 @@ func TestRuntimeCleanupRollsBackWithUserPolicyFailure(t *testing.T) {
 	before := mutationState(t, system)
 	req := withURLParam(newRequest(http.MethodDelete, "/", nil), "runtimeId", runtime)
 	testutil.Call(t, testHandler.DeleteAgentRuntime, req).Want(http.StatusInternalServerError)
-	if !rowExists(t, "agent", system) || !rowExists(t, "agent_runtime", runtime) || mutationState(t, system) != before {
+	if !rowExists(t, "agent", system) || !rowExists(t, "agent_runtime", runtime) || !reflect.DeepEqual(mutationState(t, system), before) {
 		t.Fatal("terminal cleanup escaped rollback")
 	}
 	if _, err := testHandler.Queries.GetAgentFallbackConfig(t.Context(), db.GetAgentFallbackConfigParams{AgentID: parseUUID(system), WorkspaceID: parseUUID(testWorkspaceID)}); err != nil {

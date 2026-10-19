@@ -18,6 +18,7 @@ func TestFailoverMigrationsUpDownUp(t *testing.T) {
 		"900007_agent_failover_state", "900008_agent_failover_state_agent_idx",
 		"900009_agent_failover_state_primary_key", "900010_agent_failover_state_due_idx",
 		"900011_agent_failover_state_lease_idx", "900012_agent_failover_state_workspace_idx",
+		"900023_agent_execution_challenge",
 	}
 	run := func(direction string, selected []string) {
 		t.Helper()
@@ -85,9 +86,19 @@ VALUES ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-00000000
 			`UPDATE agent_failover_state SET state='fallback_active'`,
 			`UPDATE agent_failover_state SET state='primary_probing'`,
 			`UPDATE agent_failover_state SET probe_token=gen_random_uuid()`,
+			`UPDATE agent_failover_state SET evidence_token=gen_random_uuid()`,
+			`UPDATE agent_failover_state SET evidence_context='[]',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '1 minute'`,
+			`UPDATE agent_failover_state SET evidence_context='{}',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '1 minute'`,
+			`UPDATE agent_failover_state SET evidence_context='{"version":2}',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '1 minute'`,
+			`UPDATE agent_failover_state SET evidence_context='{"version":1}',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()`,
+			`UPDATE agent_failover_state SET evidence_context='{"version":1}',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '3 minutes'`,
+			`UPDATE agent_failover_state SET evidence_context=jsonb_build_object('version',1,'oversize',repeat('x',17000)),evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '1 minute'`,
 		} {
 			_, err := pool.Exec(ctx, sql)
 			assertPostgresCode(t, err, "23514", sql)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE agent_failover_state SET evidence_context='{"version":1}',evidence_token=gen_random_uuid(),evidence_issued_at=now(),evidence_expires_at=now()+interval '2 minutes'`); err != nil {
+			t.Fatal("valid bounded challenge rejected", err)
 		}
 		if _, err := pool.Exec(ctx, `DELETE FROM agent_failover_state`); err != nil {
 			t.Fatal(err)

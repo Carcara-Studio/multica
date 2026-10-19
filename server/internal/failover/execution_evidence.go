@@ -64,8 +64,9 @@ type ExecutionIdentity struct {
 	EffectiveModel                      string
 }
 
-// EvidenceChallenge is server-issued and must be persisted/consumed atomically
-// by the future transport ledger. Pure verification below does not consume it.
+// EvidenceChallenge is server-issued. EvidenceLedger persists/consumes it
+// atomically; the future transport must use that boundary. Pure verification
+// below does not consume it.
 type EvidenceChallenge struct {
 	Token               pgtype.UUID
 	Binding             TargetBinding

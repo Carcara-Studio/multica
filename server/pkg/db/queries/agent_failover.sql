@@ -127,6 +127,7 @@ SET suspended_at = clock_timestamp(), version = version + 1,
     state = CASE WHEN state = 'primary_probing' THEN 'fallback_active' ELSE state END,
     next_probe_at = CASE WHEN state = 'primary_probing' THEN clock_timestamp() + interval '30 minutes' ELSE next_probe_at END,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+    evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
     updated_at = clock_timestamp()
 WHERE f.agent_id = @agent_id AND f.workspace_id = @workspace_id AND f.suspended_at IS NULL
 RETURNING f.*;
@@ -144,6 +145,7 @@ SET primary_generation = @new_generation, version = f.version + 1,
     state = CASE WHEN f.state = 'primary_probing' THEN 'fallback_active' ELSE f.state END,
     next_probe_at = CASE WHEN f.state <> 'primary_active' THEN stamp.at + interval '30 minutes' ELSE NULL END,
     probe_token = NULL, probe_runtime_id = NULL, probe_lease_until = NULL, probe_dispatched_at = NULL,
+    evidence_token = NULL, evidence_context = NULL, evidence_issued_at = NULL, evidence_expires_at = NULL,
     updated_at = stamp.at
 FROM locked, stamp WHERE f.agent_id = locked.agent_id
 RETURNING f.*;

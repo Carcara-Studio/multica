@@ -216,3 +216,17 @@ current connection source for future evidence transport without trusting a
 header/body or broadening generic RPC authorization. Credential/configuration
 epochs, durable challenge consumption, evidence transport, real adapter approval
 and production routing/probing remain unimplemented and disabled.
+
+## Durable capability challenge slot (2026-10-19)
+
+ADR-025 adds bounded nullable challenge fields to existing optional state via
+migration 900023. Internal issuance generates a DB nonce/deadline after config
+and state locks; consumption matches the full current target/connection/identity
+context and atomically clears the unexpired slot. A fresh manager can recover
+pending state and concurrent consumers cannot accept one response twice. New
+issuance supersedes prior challenges; generation rotation, suspend and config
+edit/removal clear the slot, while existing terminal state cleanup removes it.
+Availability/health/probe/task fields are unchanged by capability exchange.
+No production transport, adapter approval, quota/routing/probe worker or public
+API/UI is enabled. Live observation, owner transaction/commit discipline and
+complete adapter/writer/claim/minimal-inference gates remain mandatory.
