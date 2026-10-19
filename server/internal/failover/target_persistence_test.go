@@ -52,7 +52,7 @@ func TestFallbackConfigOwnershipAndConcurrentCAS(t *testing.T) {
 	wantNoTransition(t, err)
 	otherUser := f.fx.User(t, "Foreign runtime owner", "foreign-runtime-owner@example.test")
 	foreignRuntime := testUUID(f.fx.Runtime(t, "Private foreign runtime", testutil.Cols{"owner_id": otherUser, "visibility": "private"}))
-	p := db.UpdateAgentFallbackConfigParams{AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, ExpectedGeneration: c.Generation, NewGeneration: newGeneration(), RuntimeID: foreignRuntime, Model: "model"}
+	p := db.UpdateAgentFallbackConfigParams{AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, ExpectedGeneration: c.Generation, ExpectedPrimaryGeneration: f.row.PrimaryGeneration, ExpectedVersion: f.row.Version, NewPrimaryGeneration: newGeneration(), NewGeneration: newGeneration(), RuntimeID: foreignRuntime, Model: "model"}
 	_, err = f.q.UpdateAgentFallbackConfig(ctx, p)
 	wantNoTransition(t, err)
 	foreignWs := f.fx.Workspace(t, "Foreign target workspace", "foreign-target-"+uuidString(newGeneration()))
@@ -81,7 +81,7 @@ func TestFallbackConfigOwnershipAndConcurrentCAS(t *testing.T) {
 	if winners.Load() != 1 {
 		t.Fatalf("CAS winners=%d", winners.Load())
 	}
-	n, err := f.q.DeleteAgentFallbackConfig(ctx, db.DeleteAgentFallbackConfigParams{AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, ExpectedGeneration: c.Generation})
+	n, err := f.q.DeleteAgentFallbackConfig(ctx, db.DeleteAgentFallbackConfigParams{AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, ExpectedGeneration: c.Generation, ExpectedPrimaryGeneration: f.row.PrimaryGeneration, ExpectedVersion: f.row.Version, NewPrimaryGeneration: newGeneration()})
 	if err != nil || n != 0 {
 		t.Fatalf("stale delete=%d %v", n, err)
 	}
@@ -191,7 +191,7 @@ func TestExecutionRouteAndTaskRollbackAndRetryInheritance(t *testing.T) {
 	_, err = f.q.CopyAgentTaskExecutionRouteForRetry(ctx, db.CopyAgentTaskExecutionRouteForRetryParams{ParentTaskID: parent, ChildTaskID: child, WorkspaceID: c.WorkspaceID})
 	wantNoTransition(t, err)
 	f.fx.Exec(t, `UPDATE agent_task_queue SET status='failed', completed_at=now() WHERE id=$1`, parent)
-	if _, err = f.q.DeleteAgentFallbackConfig(ctx, db.DeleteAgentFallbackConfigParams{AgentID: c.AgentID, WorkspaceID: c.WorkspaceID, ExpectedGeneration: c.Generation}); err != nil {
+	if _, err = f.q.DeleteAgentFallbackConfig(ctx, db.DeleteAgentFallbackConfigParams{AgentID: c.AgentID, WorkspaceID: c.WorkspaceID, ExpectedGeneration: c.Generation, ExpectedPrimaryGeneration: f.row.PrimaryGeneration, ExpectedVersion: f.row.Version, NewPrimaryGeneration: newGeneration()}); err != nil {
 		t.Fatal(err)
 	}
 	copied, err := f.q.CopyAgentTaskExecutionRouteForRetry(ctx, db.CopyAgentTaskExecutionRouteForRetryParams{ParentTaskID: parent, ChildTaskID: child, WorkspaceID: c.WorkspaceID})
