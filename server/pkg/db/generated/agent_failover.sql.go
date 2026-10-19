@@ -150,6 +150,38 @@ func (q *Queries) DeleteAgentFailoverState(ctx context.Context, arg DeleteAgentF
 	return result.RowsAffected(), nil
 }
 
+const deleteTerminalAgentFailoverData = `-- name: DeleteTerminalAgentFailoverData :exec
+WITH removed_config AS (
+    DELETE FROM agent_fallback_config c
+    WHERE c.agent_id = $1 AND c.workspace_id = $2
+      AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = $1)
+    RETURNING agent_id
+), removed_state AS (
+    DELETE FROM agent_failover_state s
+    WHERE s.agent_id = $1 AND s.workspace_id = $2
+      AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = $1)
+      AND (SELECT count(*) FROM removed_config) >= 0
+    RETURNING agent_id
+)
+DELETE FROM agent_task_execution_route r
+WHERE r.agent_id = $1 AND r.workspace_id = $2
+  AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = $1)
+  AND (SELECT count(*) FROM removed_state) >= 0
+`
+
+type DeleteTerminalAgentFailoverDataParams struct {
+	AgentID     pgtype.UUID `json:"agent_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Only after terminal Agent deletion, in its owner's transaction. Ordinary chat
+// deletion cannot remove a surviving user's policy or queued route evidence.
+// Explicit config -> state -> route dependency preserves the leaf lock order.
+func (q *Queries) DeleteTerminalAgentFailoverData(ctx context.Context, arg DeleteTerminalAgentFailoverDataParams) error {
+	_, err := q.db.Exec(ctx, deleteTerminalAgentFailoverData, arg.AgentID, arg.WorkspaceID)
+	return err
+}
+
 const deleteWorkspaceFailoverState = `-- name: DeleteWorkspaceFailoverState :execrows
 DELETE FROM agent_failover_state WHERE workspace_id = $1
 `
@@ -296,6 +328,131 @@ func (q *Queries) InitializeAgentFailoverState(ctx context.Context, arg Initiali
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listFailoverAgentsByRuntimesForUpdate = `-- name: ListFailoverAgentsByRuntimesForUpdate :many
+SELECT a.id, a.workspace_id, a.name, a.avatar_url, a.runtime_mode, a.runtime_config, a.visibility, a.status, a.max_concurrent_tasks, a.owner_id, a.created_at, a.updated_at, a.description, a.runtime_id, a.instructions, a.archived_at, a.archived_by, a.custom_env, a.custom_args, a.mcp_config, a.model, a.thinking_level, a.composio_toolkit_allowlist, a.permission_mode, a.kind, a.system_key, a.disabled_runtime_skills, a.service_tier, a.conversation_starters FROM agent a
+WHERE a.workspace_id = $1 AND a.kind = 'user'
+  AND (a.runtime_id = ANY($2::uuid[]) OR EXISTS (
+      SELECT 1 FROM agent_fallback_config c
+      WHERE c.agent_id = a.id AND c.workspace_id = a.workspace_id
+        AND c.runtime_id = ANY($2::uuid[])))
+ORDER BY a.id
+FOR UPDATE OF a
+`
+
+type ListFailoverAgentsByRuntimesForUpdateParams struct {
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	RuntimeIds  []pgtype.UUID `json:"runtime_ids"`
+}
+
+// Caller holds all affected runtime rows, before any failover-state locks.
+// Include fallback references whose primary is elsewhere. Do not retarget the
+// optional config or rewrite immutable task ownership when a runtime changes.
+func (q *Queries) ListFailoverAgentsByRuntimesForUpdate(ctx context.Context, arg ListFailoverAgentsByRuntimesForUpdateParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listFailoverAgentsByRuntimesForUpdate, arg.WorkspaceID, arg.RuntimeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.RuntimeMode,
+			&i.RuntimeConfig,
+			&i.Visibility,
+			&i.Status,
+			&i.MaxConcurrentTasks,
+			&i.OwnerID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Description,
+			&i.RuntimeID,
+			&i.Instructions,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
+			&i.CustomEnv,
+			&i.CustomArgs,
+			&i.McpConfig,
+			&i.Model,
+			&i.ThinkingLevel,
+			&i.ComposioToolkitAllowlist,
+			&i.PermissionMode,
+			&i.Kind,
+			&i.SystemKey,
+			&i.DisabledRuntimeSkills,
+			&i.ServiceTier,
+			&i.ConversationStarters,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRuntimeSystemAgentsForFailoverCleanup = `-- name: ListRuntimeSystemAgentsForFailoverCleanup :many
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters FROM agent WHERE runtime_id = $1 AND kind = 'system'
+ORDER BY id
+`
+
+// Runtime is locked by the caller; capture identities before terminal deletion.
+func (q *Queries) ListRuntimeSystemAgentsForFailoverCleanup(ctx context.Context, runtimeID pgtype.UUID) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listRuntimeSystemAgentsForFailoverCleanup, runtimeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.RuntimeMode,
+			&i.RuntimeConfig,
+			&i.Visibility,
+			&i.Status,
+			&i.MaxConcurrentTasks,
+			&i.OwnerID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Description,
+			&i.RuntimeID,
+			&i.Instructions,
+			&i.ArchivedAt,
+			&i.ArchivedBy,
+			&i.CustomEnv,
+			&i.CustomArgs,
+			&i.McpConfig,
+			&i.Model,
+			&i.ThinkingLevel,
+			&i.ComposioToolkitAllowlist,
+			&i.PermissionMode,
+			&i.Kind,
+			&i.SystemKey,
+			&i.DisabledRuntimeSkills,
+			&i.ServiceTier,
+			&i.ConversationStarters,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markAgentPrimaryProbeDispatched = `-- name: MarkAgentPrimaryProbeDispatched :one

@@ -154,3 +154,42 @@ DELETE FROM agent_failover_state WHERE agent_id = @agent_id AND workspace_id = @
 
 -- name: DeleteWorkspaceFailoverState :execrows
 DELETE FROM agent_failover_state WHERE workspace_id = @workspace_id;
+
+-- name: ListFailoverAgentsByRuntimesForUpdate :many
+-- Caller holds all affected runtime rows, before any failover-state locks.
+-- Include fallback references whose primary is elsewhere. Do not retarget the
+-- optional config or rewrite immutable task ownership when a runtime changes.
+SELECT a.* FROM agent a
+WHERE a.workspace_id = @workspace_id AND a.kind = 'user'
+  AND (a.runtime_id = ANY(@runtime_ids::uuid[]) OR EXISTS (
+      SELECT 1 FROM agent_fallback_config c
+      WHERE c.agent_id = a.id AND c.workspace_id = a.workspace_id
+        AND c.runtime_id = ANY(@runtime_ids::uuid[])))
+ORDER BY a.id
+FOR UPDATE OF a;
+
+-- name: ListRuntimeSystemAgentsForFailoverCleanup :many
+-- Runtime is locked by the caller; capture identities before terminal deletion.
+SELECT * FROM agent WHERE runtime_id = @runtime_id AND kind = 'system'
+ORDER BY id;
+
+-- name: DeleteTerminalAgentFailoverData :exec
+-- Only after terminal Agent deletion, in its owner's transaction. Ordinary chat
+-- deletion cannot remove a surviving user's policy or queued route evidence.
+-- Explicit config -> state -> route dependency preserves the leaf lock order.
+WITH removed_config AS (
+    DELETE FROM agent_fallback_config c
+    WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
+      AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = @agent_id)
+    RETURNING agent_id
+), removed_state AS (
+    DELETE FROM agent_failover_state s
+    WHERE s.agent_id = @agent_id AND s.workspace_id = @workspace_id
+      AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = @agent_id)
+      AND (SELECT count(*) FROM removed_config) >= 0
+    RETURNING agent_id
+)
+DELETE FROM agent_task_execution_route r
+WHERE r.agent_id = @agent_id AND r.workspace_id = @workspace_id
+  AND NOT EXISTS (SELECT 1 FROM agent a WHERE a.id = @agent_id)
+  AND (SELECT count(*) FROM removed_state) >= 0;

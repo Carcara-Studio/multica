@@ -183,6 +183,7 @@ ADR-017 — Durable failover state and lease persistence boundary
 ADR-018 — Opt-in task route proof and target persistence
 ADR-019 — Target metadata assessment and atomic config invalidation
 ADR-020 — Atomic Agent mutation and failover invalidation
+ADR-021 — Runtime lifecycle invalidation and terminal cleanup
 ```
 
 ### Governance
