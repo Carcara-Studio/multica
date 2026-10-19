@@ -1,0 +1,1 @@
+ALTER TABLE agent_fallback_config ADD CONSTRAINT agent_fallback_config_pkey PRIMARY KEY USING INDEX agent_fallback_config_agent_idx;

@@ -180,6 +180,7 @@ ADR-012 — No blind retry after ambiguous partial execution
 ADR-013 — Cross-provider compatibility policy
 ADR-016 — Require affirmative billing evidence for automatic failover
 ADR-017 — Durable failover state and lease persistence boundary
+ADR-018 — Opt-in task route proof and target persistence
 ```
 
 ### Governance

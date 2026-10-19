@@ -25,11 +25,21 @@ func TestWorkspaceDeletionCleansFailoverStateAtomicallyAndPreservesNeighbour(t *
 			"state": "primary_probing", "probe_token": uuid.NewString(), "probe_runtime_id": uuid.NewString(),
 			"last_probe_at": testutil.Raw("now()"), "probe_lease_until": testutil.Raw("now()+interval '2 minutes'"),
 		}, "agent_id=$1", entry.agent)
+
+		fx.InsertNoID(t, "agent_fallback_config", testutil.Cols{
+			"agent_id": entry.agent, "workspace_id": entry.workspace,
+			"runtime_id": uuid.NewString(), "generation": uuid.NewString(),
+		}, "agent_id=$1", entry.agent)
+		fx.InsertNoID(t, "agent_task_execution_route", testutil.Cols{
+			"task_id": uuid.NewString(), "agent_id": entry.agent, "workspace_id": entry.workspace,
+			"runtime_id": uuid.NewString(), "route": "fallback", "primary_generation": uuid.NewString(),
+			"state_version": 1, "fallback_generation": uuid.NewString(),
+		}, "agent_id=$1", entry.agent)
 	}
-	stateExists := func(t *testing.T, agent string) bool {
+	bundleExists := func(t *testing.T, agent string) bool {
 		t.Helper()
 		var exists bool
-		if err := testPool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_failover_state WHERE agent_id=$1)`, agent).Scan(&exists); err != nil {
+		if err := testPool.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_failover_state WHERE agent_id=$1) + (SELECT count(*) FROM agent_fallback_config WHERE agent_id=$1) + (SELECT count(*) FROM agent_task_execution_route WHERE agent_id=$1) = 3`, agent).Scan(&exists); err != nil {
 			t.Fatal(err)
 		}
 		return exists
@@ -46,27 +56,31 @@ func TestWorkspaceDeletionCleansFailoverStateAtomicallyAndPreservesNeighbour(t *
 	if err := qtx.DeleteWorkspace(ctx, parseUUID(victim)); err != nil {
 		t.Fatal(err)
 	}
-	var stillVisible bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_failover_state WHERE agent_id=$1)`, victimAgent).Scan(&stillVisible); err != nil {
+	var leftovers int
+	if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_failover_state WHERE agent_id=$1) + (SELECT count(*) FROM agent_fallback_config WHERE agent_id=$1) + (SELECT count(*) FROM agent_task_execution_route WHERE agent_id=$1)`, victimAgent).Scan(&leftovers); err != nil {
 		t.Fatal(err)
 	}
-	if stillVisible {
+	if leftovers != 0 {
 		t.Fatal("failover state survived inside workspace delete transaction")
 	}
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !stateExists(t, victimAgent) || !stateExists(t, neighbourAgent) {
+	if !bundleExists(t, victimAgent) || !bundleExists(t, neighbourAgent) {
 		t.Fatal("workspace rollback did not preserve failover state")
 	}
 
 	req := withURLParam(newRequest(http.MethodDelete, "/api/workspaces/"+victim, nil), "id", victim)
 	req.Header.Set("X-Workspace-ID", victim)
 	testutil.Call(t, testHandler.DeleteWorkspace, req).Want(http.StatusNoContent)
-	if stateExists(t, victimAgent) {
+	var leftoversAfter int
+	if err := testPool.QueryRow(ctx, `SELECT (SELECT count(*) FROM agent_failover_state WHERE agent_id=$1) + (SELECT count(*) FROM agent_fallback_config WHERE agent_id=$1) + (SELECT count(*) FROM agent_task_execution_route WHERE agent_id=$1)`, victimAgent).Scan(&leftoversAfter); err != nil {
+		t.Fatal(err)
+	}
+	if leftoversAfter != 0 {
 		t.Fatal("workspace delete left a live probe claim orphaned")
 	}
-	if !stateExists(t, neighbourAgent) {
+	if !bundleExists(t, neighbourAgent) {
 		t.Fatal("workspace delete removed a neighbour's failover state")
 	}
 }
