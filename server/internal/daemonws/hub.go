@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -148,12 +149,13 @@ func (i ClientIdentity) AllowsWorkspace(workspaceID string) bool {
 }
 
 type client struct {
-	hub       *Hub
-	conn      *websocket.Conn
-	send      chan []byte
-	identity  ClientIdentity
-	runtimeMu sync.RWMutex
-	runtimes  map[string]struct{}
+	hub          *Hub
+	connectionID uuid.UUID
+	conn         *websocket.Conn
+	send         chan []byte
+	identity     ClientIdentity
+	runtimeMu    sync.RWMutex
+	runtimes     map[string]struct{}
 
 	// ctx is cancelled when the connection tears down, so async RPC handlers
 	// stop instead of running against a dead socket. cancel is invoked from
@@ -415,6 +417,11 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request, identity C
 		return
 	}
 
+	connectionID, err := uuid.NewRandom()
+	if err != nil {
+		http.Error(w, `{"error":"connection identity unavailable"}`, http.StatusInternalServerError)
+		return
+	}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("daemon websocket upgrade failed", "error", err)
@@ -428,12 +435,13 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request, identity C
 		}
 	}
 	c := &client{
-		hub:      h,
-		conn:     conn,
-		send:     make(chan []byte, 16),
-		identity: identity,
-		runtimes: runtimes,
-		rpcSem:   make(chan struct{}, maxInFlightRPCPerClient),
+		hub:          h,
+		connectionID: connectionID,
+		conn:         conn,
+		send:         make(chan []byte, 16),
+		identity:     identity,
+		runtimes:     runtimes,
+		rpcSem:       make(chan struct{}, maxInFlightRPCPerClient),
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	h.register(c)
@@ -1038,6 +1046,7 @@ func (c *client) handleRPCFrame(raw json.RawMessage) {
 		}
 		completion := &rpcCompletion{}
 		hctx = context.WithValue(hctx, rpcCompletionKey{}, completion)
+		hctx = context.WithValue(hctx, rpcConnectionKey{}, c)
 		defer completion.run()
 		status, body, err := handler(hctx, c.identity, req.Method, req.Body)
 		if err != nil {

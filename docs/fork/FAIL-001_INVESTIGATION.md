@@ -205,3 +205,14 @@ reject stale generations and require fresh opt-in sessions pending a scoped
 session ledger. No production writers/claims/worker/transport or public API/UI
 are wired. Real adapter/epoch tracking, ledger/transport, complete context/tool
 compatibility and all writer/retry/claim/quota/probe integration remain required.
+
+## Live transport identity (2026-10-19)
+
+ADR-024 adds a private server-generated UUID per daemon WebSocket, available to
+actual hub RPC contexts only while their connection and selected runtime scope
+remain live. Reconnects/concurrent sockets cannot share identity; disconnect,
+runtime removal and request cancellation invalidate lookup. This supplies a
+current connection source for future evidence transport without trusting a
+header/body or broadening generic RPC authorization. Credential/configuration
+epochs, durable challenge consumption, evidence transport, real adapter approval
+and production routing/probing remain unimplemented and disabled.
