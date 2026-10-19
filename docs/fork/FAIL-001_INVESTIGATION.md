@@ -230,3 +230,16 @@ Availability/health/probe/task fields are unchanged by capability exchange.
 No production transport, adapter approval, quota/routing/probe worker or public
 API/UI is enabled. Live observation, owner transaction/commit discipline and
 complete adapter/writer/claim/minimal-inference gates remain mandatory.
+
+## Protected RPC evidence exchange (2026-10-19)
+
+ADR-026 composes real live RPC connection/user/workspace scope, current protected
+management authorization, Agent/runtime owner locks and the durable ledger in an
+internal transaction boundary. Reports cannot supply their own current identity
+or observer. Final catalog/target identity and live scope are rechecked before
+commit; rollback/commit failure publishes neither challenge nor proof. The
+production constructor has no approved observation source and remains closed.
+This management preflight supports human PAT/JWT contexts only; daemon-token
+delegation and public wire methods are not enabled. Real adapter observation,
+wire transport, delegated worker authorization, all routing/claim/quota/probe
+integration and minimal inference remain explicit unfinished gates.

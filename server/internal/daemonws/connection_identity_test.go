@@ -158,3 +158,36 @@ func TestRPCConnectionIdentityRejectsExpiredRequestWithoutClosingSocket(t *testi
 		t.Fatal("request expiry incorrectly revoked socket")
 	}
 }
+
+func TestRuntimeConnectionScopeUsesAuthenticatedWorkspaceAndUser(t *testing.T) {
+	h, observations := connectionTestHub()
+	conn := dialRPCTestConn(t, h, ClientIdentity{UserID: "authenticated-user", WorkspaceIDs: []string{"workspace-a"}, RuntimeIDs: []string{"runtime-a"}})
+	sendRPCRequest(t, conn, protocol.RPCRequestPayload{RequestID: "scope", Method: "runtime-a", Body: json.RawMessage(`{"user_id":"spoofed-user","workspace_id":"workspace-b"}`)})
+	o := observeConnection(t, observations)
+	scope, ok := RuntimeConnectionScope(o.ctx, "runtime-a", "workspace-a")
+	if !ok || scope.ConnectionID != o.id || scope.UserID != "authenticated-user" || scope.DaemonID != "" {
+		t.Fatal("RPC scope did not use authenticated identity")
+	}
+	for _, workspace := range []string{"", "workspace-b"} {
+		if _, ok := RuntimeConnectionScope(o.ctx, "runtime-a", workspace); ok {
+			t.Fatal("RPC scope widened workspace", workspace)
+		}
+	}
+	h.NotifyRuntimeGone("runtime-a")
+	if _, ok := RuntimeConnectionScope(o.ctx, "runtime-a", "workspace-a"); ok {
+		t.Fatal("removed runtime retained actor scope")
+	}
+}
+
+func TestRuntimeConnectionScopeRequiresExplicitWorkspaceEvenForLegacyIdentity(t *testing.T) {
+	h, observations := connectionTestHub()
+	conn := dialRPCTestConn(t, h, ClientIdentity{UserID: "legacy-user", RuntimeIDs: []string{"runtime-a"}})
+	sendRPCRequest(t, conn, protocol.RPCRequestPayload{RequestID: "legacy", Method: "runtime-a"})
+	o := observeConnection(t, observations)
+	if !o.ok {
+		t.Fatal("existing connection identity behavior changed")
+	}
+	if _, ok := RuntimeConnectionScope(o.ctx, "runtime-a", "any-workspace"); ok {
+		t.Fatal("missing legacy workspace scope granted new management authority")
+	}
+}
