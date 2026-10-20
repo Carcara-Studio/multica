@@ -243,3 +243,16 @@ This management preflight supports human PAT/JWT contexts only; daemon-token
 delegation and public wire methods are not enabled. Real adapter observation,
 wire transport, delegated worker authorization, all routing/claim/quota/probe
 integration and minimal inference remain explicit unfinished gates.
+
+## Codex observation and credential dependency (2026-10-20)
+
+ADR-028/029 add internal, opt-in layered-config and thread-selection observation;
+ADR-030 bounds actual owned stdin writes with POSIX/Windows cancellation and
+client/observation cleanup. These are not effective-credential or inference
+proofs. The [pinned credential audit](./CODEX_CREDENTIAL_BOUNDARY.md) distinguishes
+Codex's internal credential/owner/source counters from its public account
+metadata and actual provider-auth request setup. The inspected account protocol
+does not export the required request-bound credential receipt. This is a producer
+dependency, not a reason to inspect more user secrets or add metadata-only
+observers. No production adapter is approved; routing/probes remain disabled.
+Continue independent implementation gates while preserving this explicit block.
