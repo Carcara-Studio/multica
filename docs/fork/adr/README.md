@@ -189,6 +189,8 @@ ADR-023 — Target-scoped evidence and immutable route resolution
 ADR-024 — Server-owned live RPC connection identity
 ADR-025 — Durable single-consumption execution evidence challenges
 ADR-026 — Protected RPC evidence exchange transaction boundary
+ADR-027 — Upstream runtime privacy revocation
+ADR-028 — Codex layered configuration observation
 ```
 
 ### Governance
