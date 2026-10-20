@@ -2383,6 +2383,8 @@ func describeCodexSemanticActivity(msg Message) string {
 // ── codexClient: JSON-RPC 2.0 transport ──
 
 type codexClient struct {
+	threadObservation      atomic.Pointer[codexThreadObserverState]
+	rpcActive              atomic.Int64
 	cfg                    Config
 	stdin                  interface{ Write([]byte) (int, error) }
 	mu                     sync.Mutex
@@ -2579,8 +2581,9 @@ func (c *codexClient) activeTurnID() string {
 }
 
 type pendingRPC struct {
-	ch     chan rpcResult
-	method string
+	threadObservation *codexThreadRPC
+	ch                chan rpcResult
+	method            string
 }
 
 type rpcResult struct {
@@ -2683,7 +2686,18 @@ func interruptCodexTurn(c *codexClient, threadID string, turnDone <-chan bool, c
 	}
 }
 
-func (c *codexClient) request(ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (c *codexClient) request(ctx context.Context, method string, params any) (result json.RawMessage, err error) {
+	c.rpcActive.Add(1)
+	defer c.rpcActive.Add(-1)
+	observation := c.beginCodexThreadRPC(method, params)
+	if observation == nil {
+		return c.requestRPC(ctx, method, params, nil)
+	}
+	defer func() { c.finishCodexThreadRPC(observation, err, ctx.Err()) }()
+	return c.requestRPC(ctx, method, params, observation)
+}
+
+func (c *codexClient) requestRPC(ctx context.Context, method string, params any, observation *codexThreadRPC) (json.RawMessage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -2707,7 +2721,7 @@ func (c *codexClient) request(ctx context.Context, method string, params any) (j
 	processDone := c.processDone
 	c.nextID++
 	id := c.nextID
-	pr := &pendingRPC{ch: make(chan rpcResult, 1), method: method}
+	pr := &pendingRPC{ch: make(chan rpcResult, 1), method: method, threadObservation: observation}
 	c.pending[id] = pr
 	c.mu.Unlock()
 
@@ -2768,6 +2782,7 @@ func (c *codexClient) request(ctx context.Context, method string, params any) (j
 }
 
 func (c *codexClient) notify(method string) {
+	c.invalidateCodexThreadObservation(false)
 	msg := map[string]any{
 		"jsonrpc": "2.0",
 		"method":  method,
@@ -2778,6 +2793,7 @@ func (c *codexClient) notify(method string) {
 }
 
 func (c *codexClient) respond(id int, result any) {
+	c.invalidateCodexThreadObservation(false)
 	msg := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
@@ -2789,6 +2805,7 @@ func (c *codexClient) respond(id int, result any) {
 }
 
 func (c *codexClient) respondError(id int, code int, message string) {
+	c.invalidateCodexThreadObservation(false)
 	msg := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
@@ -2803,6 +2820,7 @@ func (c *codexClient) respondError(id int, code int, message string) {
 }
 
 func (c *codexClient) closeAllPending(err error) {
+	c.invalidateCodexThreadObservation(false)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for id, pr := range c.pending {
@@ -2875,6 +2893,7 @@ func isCodexTransportError(err error) bool {
 func (c *codexClient) handleLine(line string) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		c.invalidateCodexThreadObservation(false)
 		return
 	}
 
@@ -2890,6 +2909,7 @@ func (c *codexClient) handleLine(line string) {
 		}
 		// Server request (has id + method)
 		if _, hasMethod := raw["method"]; hasMethod {
+			c.invalidateCodexThreadObservation(true)
 			c.handleServerRequest(raw)
 			return
 		}
@@ -2897,6 +2917,7 @@ func (c *codexClient) handleLine(line string) {
 
 	// Notification (no id, has method)
 	if _, hasMethod := raw["method"]; hasMethod {
+		c.invalidateCodexThreadObservation(true)
 		c.handleNotification(raw)
 	}
 }
@@ -2915,6 +2936,7 @@ func (c *codexClient) handleResponse(raw map[string]json.RawMessage) {
 	c.mu.Unlock()
 
 	if !ok {
+		c.invalidateCodexThreadObservation(false)
 		return
 	}
 
@@ -2926,6 +2948,7 @@ func (c *codexClient) handleResponse(raw map[string]json.RawMessage) {
 		_ = json.Unmarshal(errData, &rpcErr)
 		pr.ch <- rpcResult{err: fmt.Errorf("%s: %s (code=%d)", pr.method, rpcErr.Message, rpcErr.Code)}
 	} else {
+		c.recordCodexThreadResponse(pr.threadObservation, raw["result"])
 		pr.ch <- rpcResult{result: raw["result"]}
 	}
 }
