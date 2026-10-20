@@ -2832,6 +2832,7 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 			}
 		}
 		projectCtx.applyTo(&resp)
+		h.appendProjectHierarchyBriefing(r.Context(), &resp, *task, issue)
 		// Project workflow (MUL-7420): best-effort, like the status catalog
 		// below — a failure degrades to the workspace-wide status rules.
 		resp.ProjectWorkflow = h.claimProjectWorkflow(r.Context(), issue, task)
