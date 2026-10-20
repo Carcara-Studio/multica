@@ -41,6 +41,10 @@ func (o codexConfigObservation) LogValue() slog.Value       { return slog.String
 // reads only through that client's existing RPC transport, never ambient files,
 // installed CLIs, account APIs or caller-supplied response snapshots.
 type codexConfigObserver struct {
+	*codexConfigObserverState
+}
+
+type codexConfigObserverState struct {
 	mu      sync.Mutex
 	client  *codexClient
 	cwd     string
@@ -48,20 +52,20 @@ type codexConfigObserver struct {
 	current codexConfigObservation
 }
 
-func (*codexConfigObserver) String() string               { return "<codex configuration observer>" }
-func (o *codexConfigObserver) GoString() string           { return o.String() }
-func (o *codexConfigObserver) Format(s fmt.State, _ rune) { _, _ = io.WriteString(s, o.String()) }
-func (o *codexConfigObserver) LogValue() slog.Value       { return slog.StringValue(o.String()) }
+func (codexConfigObserver) String() string               { return "<codex configuration observer>" }
+func (o codexConfigObserver) GoString() string           { return o.String() }
+func (o codexConfigObserver) Format(s fmt.State, _ rune) { _, _ = io.WriteString(s, o.String()) }
+func (o codexConfigObserver) LogValue() slog.Value       { return slog.StringValue(o.String()) }
 
 func newCodexConfigObserver(client *codexClient, cwd string) (*codexConfigObserver, error) {
 	if client == nil || !filepath.IsAbs(cwd) || strings.ContainsRune(cwd, 0) {
 		return nil, errCodexConfigObservation
 	}
-	return &codexConfigObserver{client: client, cwd: cwd}, nil
+	return &codexConfigObserver{&codexConfigObserverState{client: client, cwd: cwd}}, nil
 }
 
 func (o *codexConfigObserver) observe(ctx context.Context) (codexConfigObservation, error) {
-	if o == nil {
+	if o == nil || o.codexConfigObserverState == nil {
 		return codexConfigObservation{}, errCodexConfigObservation
 	}
 	// This bounds response waiting through the existing RPC implementation.

@@ -75,7 +75,7 @@ func TestCodexConfigObservationScopeEpochsAndRedaction(t *testing.T) {
 			t.Fatal("unexpected RPC method/scope")
 		}
 	}
-	for _, v := range []any{first, o} {
+	for _, v := range []any{first, o, *o} {
 		serialized, err := json.Marshal(v)
 		if err != nil || string(serialized) != "{}" {
 			t.Fatal("private observation serialized")
