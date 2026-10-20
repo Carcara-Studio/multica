@@ -48,6 +48,11 @@ an ordinary chat leaves its surviving user Agent and failover data untouched;
 deleting a builder chat cleans its deleted system Agent. No FK, cascade, trigger,
 migration, new public response field or external provider access is introduced.
 
+## Upstream privacy refinement
+
+ADR-027 extends visibility invalidation to upstream's confirmed access revocation
+and fallback-only references, with owner-aware suspension and NOWAIT Agent locks.
+
 ## Remaining boundaries
 
 Daemon registration/heartbeat metadata is not an account epoch, capability proof,

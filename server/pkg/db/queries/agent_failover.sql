@@ -170,6 +170,19 @@ WHERE a.workspace_id = @workspace_id AND a.kind = 'user'
 ORDER BY a.id
 FOR UPDATE OF a;
 
+-- name: ListFailoverAgentsForRuntimeAccessChange :many
+-- Visibility writers hold the runtime NO KEY UPDATE access fence. Never wait
+-- on Agent rows in the reverse of chat/config owner order; return 55P03 so the
+-- entire visibility change can be reviewed/retried without partial mutation.
+SELECT a.* FROM agent a
+WHERE a.workspace_id = @workspace_id AND a.kind = 'user'
+  AND (a.runtime_id = @runtime_id OR EXISTS (
+      SELECT 1 FROM agent_fallback_config c
+      WHERE c.agent_id = a.id AND c.workspace_id = a.workspace_id
+        AND c.runtime_id = @runtime_id))
+ORDER BY a.id
+FOR UPDATE OF a NOWAIT;
+
 -- name: ListRuntimeSystemAgentsForFailoverCleanup :many
 -- Runtime is locked by the caller; capture identities before terminal deletion.
 SELECT * FROM agent WHERE runtime_id = @runtime_id AND kind = 'system'
