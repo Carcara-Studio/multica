@@ -55,7 +55,7 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	}))
 	fx.Exec(t, "UPDATE workspace SET issue_counter = 1 WHERE id = $1", workspace)
 	task := util.MustParseUUID(fx.Task(t, util.UUIDToString(source), testutil.Cols{
-		"issue_id": parent, "originator_user_id": fx.UserID, "accountable_user_id": fx.UserID,
+		"issue_id": parent, "status": "running", "originator_user_id": fx.UserID, "accountable_user_id": fx.UserID,
 	}))
 	f := &hierarchyCreateFixture{fx: fx}
 	bus := events.New()
@@ -138,7 +138,11 @@ func TestHierarchyCreateReplayConcurrentAndFollowup(t *testing.T) {
 	f.fx.Exec(t, "UPDATE agent_task_queue SET status = 'completed' WHERE id = $1", taskID)
 	f.fx.Exec(t, "UPDATE issue SET title = 'edited', status = 'done' WHERE id = $1", child.ID)
 	// Origin lineage from a different turn must not change the operation identity.
-	f.p.OriginID = util.MustParseUUID(uuid.NewString())
+	f.fx.Exec(t, "UPDATE agent_task_queue SET status = 'completed' WHERE id = $1", f.p.OriginID)
+	f.p.OriginID = util.MustParseUUID(f.fx.Task(t, util.UUIDToString(f.p.CreatorID), testutil.Cols{
+		"issue_id": f.p.ParentIssueID, "status": "running",
+		"originator_user_id": f.fx.UserID, "accountable_user_id": f.fx.UserID,
+	}))
 	replay, err := f.create()
 	if err != nil || !replay.DelegationReplayed || replay.Issue.ID != child.ID || replay.Issue.Title != "edited" {
 		t.Fatalf("completed/edited replay: %+v, %v", replay, err)
@@ -246,5 +250,29 @@ func TestHierarchyCreateWorkspaceTeardownSweepsIdentity(t *testing.T) {
 	var n int
 	if err := tx.QueryRow(context.Background(), "SELECT count(*) FROM project_hierarchy_delegation WHERE workspace_id = $1", f.p.WorkspaceID).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("workspace teardown ledger = %d, %v", n, err)
+	}
+}
+
+func TestHierarchyCreateRejectsInvalidTaskAndUnsupportedWork(t *testing.T) {
+	for _, mutate := range []struct {
+		name string
+		change func(*IssueCreateParams)
+	}{
+		{"missing task", func(p *IssueCreateParams) { p.OriginID = util.MustParseUUID(uuid.NewString()) }},
+		{"source capture", func(p *IssueCreateParams) { p.SourceContext = &SourceContextCapture{} }},
+		{"labels", func(p *IssueCreateParams) { p.LabelIDs = []pgtype.UUID{util.MustParseUUID(uuid.NewString())} }},
+		{"stage", func(p *IssueCreateParams) { p.Stage = pgtype.Int4{Int32: 1, Valid: true} }},
+		{"custom status", func(p *IssueCreateParams) { p.Status = "review" }},
+	} {
+		t.Run(mutate.name, func(t *testing.T) {
+			f := newHierarchyCreateFixture(t)
+			mutate.change(&f.p)
+			if _, err := f.create(); !errors.Is(err, ErrDelegationInvalid) {
+				t.Fatalf("invalid request = %v", err)
+			}
+			if n := f.fx.Count(t, "SELECT count(*) FROM project_hierarchy_delegation WHERE workspace_id = $1", f.p.WorkspaceID); n != 0 {
+				t.Fatalf("invalid request left %d identities", n)
+			}
+		})
 	}
 }

@@ -33,6 +33,8 @@ across later Agent turns and child edits/completion/deletion without new work.
 
 Add an optional internal hierarchy admission point at the beginning of native
 Create's transaction. It calls CheckDelegationRelation before other locks.
+The native hook also verifies that the supplied source task belongs to the
+parent/delegator/workspace and is running. This read is not a task-liveness fence.
 A trusted mandatory callback must independently reauthorize the current
 authenticated actor/task and target invocation/runtime using transaction-bound
 queries, on new creation and replay. No transport, production caller or public

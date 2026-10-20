@@ -52,6 +52,16 @@ func prepareHierarchyDelegation(ctx context.Context, tx pgx.Tx, p IssueCreatePar
 		return nil, err
 	}
 	qtx := db.New(tx)
+	sourceTask, err := qtx.GetAgentTaskInWorkspace(ctx, db.GetAgentTaskInWorkspaceParams{ID: p.OriginID, WorkspaceID: p.WorkspaceID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrDelegationInvalid
+		}
+		return nil, fmt.Errorf("load delegation source task: %w", err)
+	}
+	if sourceTask.AgentID != p.CreatorID || sourceTask.IssueID != p.ParentIssueID || sourceTask.Status != "running" {
+		return nil, ErrDelegationInvalid
+	}
 	if err := d.Authorize(ctx, qtx, relation); err != nil {
 		return nil, err
 	}
