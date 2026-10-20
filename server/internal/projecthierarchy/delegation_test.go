@@ -82,6 +82,13 @@ func TestDelegationRelationRejectsNonDirectOrUnavailableTargets(t *testing.T) {
 			case "invalid identity":
 				in.TargetID = pgtype.UUID{Valid: true}
 			}
+			// The cross-Project case deliberately moves a membership out of
+			// the fixture's original Project cleanup scope.
+			t.Cleanup(func() {
+				if _, err := pool.Exec(context.Background(), "DELETE FROM project_agent_membership WHERE id = $1", target.ID); err != nil {
+					t.Error(err)
+				}
+			})
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				t.Fatal(err)

@@ -58,6 +58,13 @@ current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
 management remains a separate pending adapter. This roadmap does not authorize a
 different delegation architecture.
 
+The next delegation prerequisite (#75) is a transaction-owned direct-report
+relation gate. See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). It freezes
+the relevant structural rows but does not authenticate a caller, approve target
+invocation/runtime eligibility or create a child Issue. Native Issue-create
+transaction integration and durable operation idempotency remain open; no
+public delegation API/CLI is enabled.
+
 Automatic fallback and 30-minute primary recovery probes remain disabled.
 The [credential boundary audit](./CODEX_CREDENTIAL_BOUNDARY.md) records an external
 producer-observability dependency, not permission to replace Codex, inspect user
