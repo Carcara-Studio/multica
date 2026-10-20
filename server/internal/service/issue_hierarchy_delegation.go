@@ -58,11 +58,11 @@ func prepareHierarchyDelegation(ctx context.Context, tx pgx.Tx, p IssueCreatePar
 	// Only these work fields are supported. Origin task is lineage, not intent:
 	// a later authenticated Agent turn can retry the same logical operation.
 	intent, err := json.Marshal(struct {
-		ProjectID pgtype.UUID
-		TargetID pgtype.UUID
-		Title string
+		ProjectID   pgtype.UUID
+		TargetID    pgtype.UUID
+		Title       string
 		Description pgtype.Text
-		Priority string
+		Priority    string
 	}{p.ProjectID, p.AssigneeID, p.Title, p.Description, p.Priority})
 	if err != nil {
 		return nil, fmt.Errorf("encode delegation intent: %w", err)

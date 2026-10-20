@@ -17,10 +17,10 @@ import (
 )
 
 type hierarchyCreateFixture struct {
-	fx *testutil.Fixture
-	svc *IssueService
-	p IssueCreateParams
-	opts IssueCreateOpts
+	fx     *testutil.Fixture
+	svc    *IssueService
+	p      IssueCreateParams
+	opts   IssueCreateOpts
 	events atomic.Int32
 }
 
@@ -33,7 +33,8 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	fx.Member(t, fx.WorkspaceID, fx.UserID, "owner")
 	project := util.MustParseUUID(fx.Project(t, "delegation"))
 	source := util.MustParseUUID(fx.Agent(t, "source", ""))
-	target := util.MustParseUUID(fx.Agent(t, "target", ""))
+	runtime := fx.Runtime(t, "fixture-only runtime")
+	target := util.MustParseUUID(fx.Agent(t, "target", runtime))
 	workspace := util.MustParseUUID(fx.WorkspaceID)
 	q := db.New(pool)
 	h := projecthierarchy.NewService(q, pool)
@@ -59,7 +60,7 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	f := &hierarchyCreateFixture{fx: fx}
 	bus := events.New()
 	bus.Subscribe(protocol.EventIssueCreated, func(events.Event) { f.events.Add(1) })
-	f.svc = NewIssueService(q, pool, bus, nil, nil)
+	f.svc = NewIssueService(q, pool, bus, nil, &TaskService{Queries: q, TxStarter: pool, Bus: bus})
 	f.p = IssueCreateParams{
 		WorkspaceID: workspace, ProjectID: project, ParentIssueID: parent,
 		Title: "delegated work", Status: "todo", Priority: "none",
@@ -69,11 +70,22 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	}
 	f.opts.HierarchyDelegation = &HierarchyDelegationCreate{
 		RequestID: util.MustParseUUID(uuid.NewString()),
-		// Test-only admission. No runtime or installed CLI is invoked; the
-		// unbound fixture target cannot enter native assignment scheduling.
-		Authorize: func(_ context.Context, _ *db.Queries, r projecthierarchy.DelegationRelation) error {
+		// Test-only actor/invocation admission with the native readiness check.
+		// Scheduling inserts a queue row only; no daemon or CLI is executed.
+		Authorize: func(ctx context.Context, qtx *db.Queries, r projecthierarchy.DelegationRelation) error {
 			if r.ParentID != parent || r.ProjectID != project {
 				return errors.New("unexpected fixture scope")
+			}
+			agent, err := qtx.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: target, WorkspaceID: workspace})
+			if err != nil {
+				return err
+			}
+			verdict, err := AgentReadiness(ctx, RuntimeLookup{Queries: qtx}, agent)
+			if err != nil {
+				return err
+			}
+			if verdict.Blocked() {
+				return errors.New("fixture target runtime blocked")
 			}
 			return nil
 		},
@@ -91,7 +103,7 @@ func TestHierarchyCreateReplayConcurrentAndFollowup(t *testing.T) {
 	f := newHierarchyCreateFixture(t)
 	type result struct {
 		value IssueCreateResult
-		err error
+		err   error
 	}
 	results := make(chan result, 2)
 	start := make(chan struct{})
@@ -121,12 +133,18 @@ func TestHierarchyCreateReplayConcurrentAndFollowup(t *testing.T) {
 	if n := f.fx.Count(t, "SELECT count(*) FROM project_hierarchy_delegation WHERE workspace_id = $1", f.p.WorkspaceID); n != 1 {
 		t.Fatalf("ledger rows = %d", n)
 	}
+	var taskID pgtype.UUID
+	f.fx.QueryRow(t, "SELECT id FROM agent_task_queue WHERE issue_id = $1", child.ID).Scan(&taskID)
+	f.fx.Exec(t, "UPDATE agent_task_queue SET status = 'completed' WHERE id = $1", taskID)
 	f.fx.Exec(t, "UPDATE issue SET title = 'edited', status = 'done' WHERE id = $1", child.ID)
 	// Origin lineage from a different turn must not change the operation identity.
 	f.p.OriginID = util.MustParseUUID(uuid.NewString())
 	replay, err := f.create()
 	if err != nil || !replay.DelegationReplayed || replay.Issue.ID != child.ID || replay.Issue.Title != "edited" {
 		t.Fatalf("completed/edited replay: %+v, %v", replay, err)
+	}
+	if n := f.fx.Count(t, "SELECT count(*) FROM agent_task_queue WHERE issue_id = $1", child.ID); n != 1 {
+		t.Fatalf("replay dispatched new work after completion: %d tasks", n)
 	}
 	f.opts.HierarchyDelegation.RequestID = util.MustParseUUID(uuid.NewString())
 	followup, err := f.create()
