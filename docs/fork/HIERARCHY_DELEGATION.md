@@ -1,8 +1,8 @@
 # Transactional direct-report delegation admission
 
-- Issues: #75 and #77; follows #73/#74
+- Issues: #75, #77 and #80; follows #73/#74
 - Authority: ADR-001, ADR-003, ADR-004 and ADR-014
-- Fork baseline: `1529aec2db660aad6417ac3842dce91e768ec181`
+- Fork baseline: `7ea1fd99b84d4385f2896b863a53da765bd84e02`
 - Upstream baseline: `47120a4131564175da044d63d897ed9b5d76979a`
 
 ## Implemented boundary
@@ -34,22 +34,21 @@ inverted wait. The gate acquires the counter-compatible lock first; it does not
 increment the counter. This serializes admission with other workspace Issue
 creates and is a deliberate contention cost.
 
-Call before taking Issue/property/Agent/counter locks. Future integration must
-review the complete upstream create/teardown/permission lock graph; this order
-is not a blanket approval for arbitrary outer transactions or multi-action use.
+Call before taking Issue/property/Agent/counter locks. The HTTP adapter follows
+this ordering and native snapshot authorization. This is not blanket approval
+for arbitrary outer transactions, task-row locks or multi-action use.
 
 The returned identifiers are structural facts, not a transferable authorization
 receipt. They grant no caller authentication, target invocation permission,
-runtime readiness or execution/idempotency capability. Those checks must be
-composed independently in the same final create operation; no public caller
-can invoke this gate yet. A fresh transaction must recheck the relation.
+runtime readiness or execution/idempotency capability. Those checks are composed independently by the task-token HTTP adapter in the
+same final Create operation. A fresh transaction must recheck the relation.
 
 ## Native child creation and durable replay
 
 Issue #77 adds an optional internal `IssueCreateOpts.HierarchyDelegation`
 hook in the existing Create transaction. It calls the relation gate before
 other create locks, then requires a trusted transaction-bound authorization
-callback on both creation and replay. No production caller is registered.
+callback on both creation and replay. The task-token-only HTTP adapter described below supplies this callback.
 
 ADR-031 records the inspected absence of a general native create identity and
 the selected FK-free operation identity table. Workspace, parent, delegator
@@ -70,10 +69,31 @@ deferral. Ordinary Create options preserve existing behavior. Its ordinary
 post-commit assignment enqueue remains unchanged, including its crash gap:
 this guarantees creation replay, not exactly-once durable dispatch.
 
-Public API/CLI remains unavailable until independently authenticated actor/task
-and normal invocation/runtime admission are implemented and reviewed. A test
-callback is not production permission. Parent completion, mentions and Squads
-keep native semantics.
+## Authenticated API
+
+POST /api/issues/{id}/hierarchy-delegations accepts a bearer MAT for the
+delegator's currently running, directly assigned parent Issue. Parent supports
+UUID or its workspace identifier. Body fields are request_id, target_agent_id,
+title, optional description and priority. Actor, task, originator and Project
+cannot be supplied in JSON.
+
+The adapter re-reads the token, bindings, expiry, token-user membership and
+running source task in native Create's transaction, then uses the normal
+originator-based canInvokeAgent and AgentReadiness checks with transaction-bound
+queries. Archived/unbound/unusable/owner-incompatible targets fail closed;
+normally waitable offline targets retain native queue semantics. There is no
+hierarchy or admin bypass for private/member-scoped Agents. Squad tasks are
+excluded. Creation and replay use the same admission checks.
+
+Response is {issue_id, replayed}: 201 new, 200 replay, 409 changed intent and
+410 deleted child. A receipt does not mean a daemon has started or that a queue
+ID can be recovered from a prior attempt. Fetch native Issue/task resources.
+CLI command/tool advertisement remains pending.
+
+ADR-032 explicitly defines fresh-read authorization, not a task-completion or
+revocation lease spanning commit. No task lock is acquired after Issue/Agent
+locks, avoiding inversion with native completion. The native post-commit
+scheduling gap remains. Parent completion, mentions and Squads are unchanged.
 
 ## Validation
 
@@ -93,5 +113,5 @@ and workspace identity cleanup.
 
 No local execution environment is available. Compile/vet/full PostgreSQL/race
 CI is required for the exact merge head. No local test/formatting result or
-installed-agent/account/inference use is claimed. Public delegation, automatic
+installed-agent/account/inference use is claimed. The task-token API is available; CLI/tool discovery remains pending. Automatic
 fallback and primary recovery probes remain disabled.

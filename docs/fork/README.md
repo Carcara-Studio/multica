@@ -58,12 +58,14 @@ current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
 management remains a separate pending adapter. This roadmap does not authorize a
 different delegation architecture.
 
-An internal delegation prerequisite (#75) adds a transaction-owned direct-report
-relation gate. See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). It freezes
-the relevant structural rows but does not authenticate a caller, approve target
-invocation/runtime eligibility or create a child Issue. Native Issue-create
-transaction integration and durable operation idempotency remain open; no
-public delegation API/CLI is enabled.
+The delegation core (#75/#77) provides transactional one-hop validation and
+durable native child creation. The task-token-only API (#80) composes current
+MAT/task bindings, originator-based invocation and native runtime readiness.
+CLI/tool discovery remains pending.
+See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). The relation gate freezes
+the relevant structural rows; the authenticated adapter supplies the independent
+invocation/runtime gate. Native child creation and replay reuse existing
+Issue/task/wakeup semantics, without a separate executor or recursive fan-out.
 
 Automatic fallback and 30-minute primary recovery probes remain disabled.
 The [credential boundary audit](./CODEX_CREDENTIAL_BOUNDARY.md) records an external
