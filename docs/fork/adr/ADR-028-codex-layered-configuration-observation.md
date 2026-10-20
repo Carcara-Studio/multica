@@ -46,11 +46,12 @@ environment, linked auth files, provider-specific settings and refresh behavior
 still require independent credential observation. The account description is
 not a substitute. This observer produces **no credential epoch**.
 
-The two-second context bounds response waiting in the existing RPC implementation;
-its stdin Write is inherited and can still block. Parsing limits apply after
-transport receipt; the upstream stream scanner keeps its existing limit. An
-approved execution adapter additionally needs bounded cancellable transport and
-process lifecycle ownership. Snapshot success is point-in-time, not a lease;
+At introduction, the two-second context bounded response waiting but inherited
+an unbounded stdin Write. ADR-030 subsequently bounds the real owned process
+stdin and aborts its owner on an ambiguous write. Legacy in-memory test writers
+do not certify this transport guarantee. Parsing limits still apply after
+transport receipt; the upstream stream scanner keeps its existing limit. Adapter
+approval still requires the remaining credential and execution guarantees. Snapshot success is point-in-time, not a lease;
 changes after return still need an execution-boundary recheck.
 
 No public method/endpoint, capability claim, production adapter approval, default
