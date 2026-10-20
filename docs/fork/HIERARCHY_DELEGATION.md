@@ -1,8 +1,8 @@
 # Transactional direct-report delegation admission
 
-- Issue: #75; follows #73/#74
+- Issues: #75 and #77; follows #73/#74
 - Authority: ADR-001, ADR-003, ADR-004 and ADR-014
-- Fork baseline: `53a17cd044f1d8012e1162bf7c0b3fdb45c0e631`
+- Fork baseline: `1529aec2db660aad6417ac3842dce91e768ec181`
 - Upstream baseline: `47120a4131564175da044d63d897ed9b5d76979a`
 
 ## Implemented boundary
@@ -44,28 +44,36 @@ runtime readiness or execution/idempotency capability. Those checks must be
 composed independently in the same final create operation; no public caller
 can invoke this gate yet. A fresh transaction must recheck the relation.
 
-## Child creation and idempotency remain open
+## Native child creation and durable replay
 
-The inspected `IssueService.Create` owns its transaction and commits before
-publishing events and ordinary assignment enqueue. Wrapping it with another
-transaction would not make a hierarchy check atomic with its child write or
-side effects. Do not hold a relation-check transaction open while calling
-ordinary Create through a separate connection.
+Issue #77 adds an optional internal `IssueCreateOpts.HierarchyDelegation`
+hook in the existing Create transaction. It calls the relation gate before
+other create locks, then requires a trusted transaction-bound authorization
+callback on both creation and replay. No production caller is registered.
 
-The existing active-title duplicate guard is not a stable delegation-operation
-key: a deliberate follow-up may share a title, and a completed/deleted child
-must not allow a network retry to create a new logical operation. Inspection
-found no general Issue-create idempotency key in the current params/schema.
-Autopilot quota and maintenance-job keys are unrelated subsystems and must not
-be reused for hierarchy work.
+ADR-031 records the inspected absence of a general native create identity and
+the selected FK-free operation identity table. Workspace, parent, delegator
+and request UUID identify one operation. Project, target, title, description
+and priority form the immutable intent hash. Original source task is lineage;
+later authorized turns can reuse the same request identity.
 
-The next integration needs a narrow in-transaction admission point in native
-Issue creation, durable operation identity/lineage, replay and changed-payload
-semantics, deletion/tombstone behavior, and atomic rollback/commit coverage.
-Storage/index/lifecycle choices require explicit design under ADR-004/014/015.
-No new ledger/table, generic callback framework or separate executor is added
-by this prerequisite. Do not expose a delegation endpoint/CLI until the entire
-authenticated invocation and idempotent child-create path is complete.
+Identity and native child commit together. Same intent returns the current
+child without counters/events/enqueue; changed intent conflicts. Child
+completion/edits do not reopen the identity. A deleted child retains a
+tombstone until workspace teardown and returns an unavailable-child error.
+A new request UUID represents deliberate follow-up, including the same title.
+No separate hierarchy task/executor is introduced.
+
+The initial hook accepts a todo child with native agent_create origin and
+rejects attachments/labels/properties/dates/stages/source capture/channel
+deferral. Ordinary Create options preserve existing behavior. Its ordinary
+post-commit assignment enqueue remains unchanged, including its crash gap:
+this guarantees creation replay, not exactly-once durable dispatch.
+
+Public API/CLI remains unavailable until independently authenticated actor/task
+and normal invocation/runtime admission are implemented and reviewed. A test
+callback is not production permission. Parent completion, mentions and Squads
+keep native semantics.
 
 ## Validation
 
@@ -77,6 +85,11 @@ Separate transactions attempt conflicting row locks with NOWAIT and must receive
 locks are available; an actual reparent then invalidates the old relation.
 A busy native workspace counter blocks admission before Project acquisition.
 The gate creates neither child Issues nor queue rows.
+
+Native create tests additionally cover concurrent retry, follow-up, changed
+intent, completed/edited/deleted children, fresh authorization on replay,
+counter/event suppression, reassigned parent, missing callback, commit rollback
+and workspace identity cleanup.
 
 No local execution environment is available. Compile/vet/full PostgreSQL/race
 CI is required for the exact merge head. No local test/formatting result or
