@@ -70,6 +70,8 @@ ADR-014 was accepted by the human maintainer on 2026-10-14 and is implementation
 
 ADR-015 was accepted on 2026-10-16 during MFK-010 and is implementation authority for allocating and renumbering fork-owned database migrations. Fork migrations use the reserved `900000+` band unless this ADR is explicitly amended.
 
+[ADR-031](ADR-031-native-delegation-operation-identity.md) resolves ADR-004's deferred native delegation storage choice under Issue #77.
+
 ## Required Structure
 
 Use this template:

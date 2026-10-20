@@ -191,6 +191,9 @@ cleared_vcs_connections AS (
 cleared_client_usage_workspace AS (
     UPDATE client_usage_daily SET workspace_id = NULL WHERE workspace_id = $1
 ),
+cleared_project_hierarchy_delegations AS (
+    DELETE FROM project_hierarchy_delegation WHERE workspace_id = $1
+),
 cleared_project_agent_memberships AS (
     -- Fork hierarchy relationships are application-owned under ADR-014. The
     -- surrounding DeleteWorkspace transaction already holds the workspace row

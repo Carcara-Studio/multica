@@ -1411,6 +1411,19 @@ type ProjectAgentMembership struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ProjectHierarchyDelegation struct {
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	ParentIssueID    pgtype.UUID        `json:"parent_issue_id"`
+	DelegatorAgentID pgtype.UUID        `json:"delegator_agent_id"`
+	RequestID        pgtype.UUID        `json:"request_id"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
+	TargetAgentID    pgtype.UUID        `json:"target_agent_id"`
+	ChildIssueID     pgtype.UUID        `json:"child_issue_id"`
+	SourceTaskID     pgtype.UUID        `json:"source_task_id"`
+	RequestHash      []byte             `json:"request_hash"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type ProjectResource struct {
 	ID           pgtype.UUID        `json:"id"`
 	ProjectID    pgtype.UUID        `json:"project_id"`

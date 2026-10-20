@@ -15,6 +15,7 @@ import (
 // allocating its normal sequential prefixes without repeated filename collisions.
 func init() {
 	indexes := map[string]string{
+		"900025_project_hierarchy_delegation_identity_idx": "project_hierarchy_delegation_identity_idx",
 		"900001_project_agent_membership_id_idx":            "project_agent_membership_id_idx",
 		"900002_project_agent_membership_project_agent_idx": "project_agent_membership_project_agent_idx",
 		"900003_project_agent_membership_active_root_idx":   "project_agent_membership_active_root_idx",

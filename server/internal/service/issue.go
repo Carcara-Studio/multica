@@ -100,6 +100,9 @@ type IssueCreateParams struct {
 // IssueCreateOpts groups optional knobs for IssueService.Create. Most
 // callers leave it zero-valued.
 type IssueCreateOpts struct {
+	// HierarchyDelegation opts into internal one-hop admission and durable replay.
+	HierarchyDelegation *HierarchyDelegationCreate
+
 	// BroadcastPayload, if non-nil, is invoked after the issue row is
 	// created and attachments are linked. Its return value is sent as
 	// the EventIssueCreated payload via the event bus. The HTTP handler
@@ -194,6 +197,9 @@ var ErrSourceContextAlreadyAttached = errors.New("source context is already atta
 //   - On ErrActiveDuplicate: DuplicateIssue is the row that blocked the
 //     create; Issue and Attachments are zero.
 type IssueCreateResult struct {
+	// DelegationReplayed means no creation event or assignment was emitted.
+	DelegationReplayed bool
+
 	Issue       db.Issue
 	Attachments []db.Attachment
 	// AssignedTaskID is populated when Create enqueues the automatic task for
@@ -239,6 +245,18 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.Queries.WithTx(tx)
+	issueID := dbid.NewV7()
+	if opts.HierarchyDelegation != nil {
+		replay, err := prepareHierarchyDelegation(ctx, tx, p, opts, issueID)
+		if err != nil {
+			return IssueCreateResult{}, err
+		}
+		if replay != nil {
+			return *replay, nil
+		}
+		// A new explicit identity permits deliberate follow-up with the same title.
+		p.AllowDuplicate = true
+	}
 
 	properties, err := validateIssueCreateProperties(ctx, tx, qtx, p.WorkspaceID, p.Properties)
 	if err != nil {
@@ -375,7 +393,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 	var assignedTask db.AgentTaskQueue
 	if p.OriginType.Valid {
 		issue, err = qtx.CreateIssueWithOrigin(ctx, db.CreateIssueWithOriginParams{
-			ID:            dbid.NewV7(),
+			ID:            issueID,
 			WorkspaceID:   p.WorkspaceID,
 			Title:         p.Title,
 			Description:   p.Description,
@@ -398,7 +416,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		})
 	} else {
 		issue, err = qtx.CreateIssue(ctx, db.CreateIssueParams{
-			ID:            dbid.NewV7(),
+			ID:            issueID,
 			WorkspaceID:   p.WorkspaceID,
 			Title:         p.Title,
 			Description:   p.Description,
