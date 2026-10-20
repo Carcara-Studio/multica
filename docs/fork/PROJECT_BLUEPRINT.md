@@ -6,7 +6,7 @@
 > **Reference project:** `paperclipai/paperclip`
 > **Latest revalidated upstream baseline:** `47120a4131564175da044d63d897ed9b5d76979a`
 > **Snapshot date:** 2026-10-20
-> **Current phase:** Independent hierarchy runtime-context work; failover producer/adapter and execution gates remain open
+> **Current phase:** Direct-Issue hierarchy context implemented; delegation and failover execution gates remain open
 
 ---
 
@@ -939,14 +939,16 @@ history explicit rather than treating the old labels as pending implementation
 IDs. Remaining hierarchy work is described by scope until a focused Issue assigns
 an unambiguous identifier:
 
-- execution briefing context, using current Project-scoped memberships;
+- remaining briefing contexts beyond direct Issue claims (the informational first slice is #73);
 - direct-report delegation, existing completion wakeups and escalation;
 - Agent archive/removal safeguards under ADR-006;
 - a hierarchy CLI adapter, if scheduled.
 
-The next independent product slice is briefing context. Reinspect current claim,
-briefing and Issue integration points and the HIER-GAP regressions before changing
-runtime behavior. Preserve no-Project/direct-Agent/Squad defaults and existing
+The first briefing slice (#73) appends bounded, informational one-hop context to
+direct Issue claims; see [HIERARCHY_BRIEFING.md](./HIERARCHY_BRIEFING.md). It changes
+no task target and grants no delegation authority. Remaining briefing contexts
+and direct-report delegation require separate focused Issues. Reinspect current
+claim/briefing/Issue hooks and HIER-GAP regressions before each runtime change. Preserve no-Project/direct-Agent/Squad defaults and existing
 structural service ownership. API and web/desktop/mobile management are complete
 slices, not proof that runtime delegation/escalation is implemented.
 
@@ -1133,8 +1135,9 @@ Current revalidated Multica upstream is
 `47120a4131564175da044d63d897ed9b5d76979a`, retained in fork ancestry. The old
 `8352787` value was the historical HIER-002 gate, not the current baseline.
 Automatic fallback and recovery remain disabled while the separate producer,
-adapter, routing and inference guarantees are unresolved. The next independent
-hierarchy slice is briefing context; rebuilding HIER-004 is not pending work.
+adapter, routing and inference guarantees are unresolved. The informational direct-Issue briefing slice is implemented in #73; other
+contexts and delegation/lifecycle integration remain pending. Rebuilding HIER-004
+is not pending work.
 
 ---
 

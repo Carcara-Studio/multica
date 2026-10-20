@@ -48,13 +48,15 @@ HIER-005 is shared web/desktop management; Issue #28 calls mobile parity HIER-00
 and its merged PR #33 uses HIER-006. Do not reuse these labels for unimplemented
 CLI or briefing work.
 
-The next independent product slice is Project hierarchy context in execution
-briefings, followed by the accepted direct-report delegation/wakeup/escalation
-and Agent lifecycle rules. Before implementation, create a focused Issue and
-reinspect current claim/briefing/Issue hooks. Add the documented no-Project and
-direct-Agent routing regressions; preserve Squad leader routing and projects
-that do not use hierarchy. CLI management is still a separate pending adapter.
-This roadmap does not authorize a different delegation architecture.
+The first runtime-context slice (#73) adds an informational one-hop Project
+hierarchy snapshot to directly assigned Issue claims. See
+[HIERARCHY_BRIEFING.md](./HIERARCHY_BRIEFING.md) for exclusions and bounds. It grants
+no delegation authority and does not cover chat/autopilot/quick-create or Squad
+tasks. The accepted direct-report delegation/wakeup/escalation and Agent lifecycle
+rules remain pending. Before each next slice, create a focused Issue, reinspect
+current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
+management remains a separate pending adapter. This roadmap does not authorize a
+different delegation architecture.
 
 Automatic fallback and 30-minute primary recovery probes remain disabled.
 The [credential boundary audit](./CODEX_CREDENTIAL_BOUNDARY.md) records an external
