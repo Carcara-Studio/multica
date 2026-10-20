@@ -28,30 +28,44 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 
 ## Current Phase
 
-Foundation architecture and the upstream regression baseline are established. Project Hierarchy persistence and the authoritative transactional mutation domain are now implemented.
+Reconciled on 2026-10-20 against merged code and closed Issues #19, #21, #27,
+#28 and #69. The API and management clients are implemented; hierarchy-aware
+execution and end-to-end automatic failover are not complete.
 
-Current sequence:
+| Area | Implemented | Remaining boundary |
+| --- | --- | --- |
+| Hierarchy persistence/domain | Schema, Project/Workspace cleanup, serialized full-tree validation and structural mutations (#16/#18) | Agent lifecycle rules under ADR-006 |
+| Hierarchy API | Five Project-scoped routes around the authoritative service (#22) | No duplicate API implementation needed |
+| Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
+| Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
+| Failover foundations | Durable state/config, lifecycle invalidation, scoped evidence/connection/challenge/exchange boundaries, internal Codex config/thread observations and cancellable owned stdin (ADR-016–030) | Production evidence approvals, all writer/retry/claim integration, quota activation and isolated recovery inference |
+| Effective Codex credentials | Source-pinned investigation (#70) | Producer does not expose the required request-bound credential receipt through the inspected account interfaces |
 
-```text
-MFK-003 — architecture documentation                 DONE
-MFK-004 — hierarchy ADRs                             DONE
-MFK-005 — failover ADRs                              DONE
-MFK-006 — upstream regression baseline               DONE
-MFK-007 — activate Project Hierarchy implementation  DONE
-HIER-001 — Project hierarchy schema                  DONE
-HIER-002 — ProjectHierarchyService                   DONE
-HIER-003 — cycle-safe concurrent mutations           DONE / SUBSUMED BY HIER-002
-MFK-008 — reconcile roadmap/governance                IN PROGRESS
-HIER-004 — Project hierarchy API                     NEXT PRODUCT WORK
-```
+HIER-003 was satisfied by HIER-002; it is not another mutation implementation.
+The original candidate labels HIER-005 (CLI) and HIER-006 (briefing) were
+subsequently reused in delivered UI work. Actual Issue/PR scope is authoritative:
+HIER-005 is shared web/desktop management; Issue #28 calls mobile parity HIER-005M
+and its merged PR #33 uses HIER-006. Do not reuse these labels for unimplemented
+CLI or briefing work.
 
-HIER-003 is not a separate implementation branch. HIER-002 already delivered Project-row serialization, complete final-tree validation, cycle prevention, concurrent cycle/root mutation coverage, and rollback/lock-release validation. Reimplementing that scope would duplicate fork logic without adding capability.
+The next independent product slice is Project hierarchy context in execution
+briefings, followed by the accepted direct-report delegation/wakeup/escalation
+and Agent lifecycle rules. Before implementation, create a focused Issue and
+reinspect current claim/briefing/Issue hooks. Add the documented no-Project and
+direct-Agent routing regressions; preserve Squad leader routing and projects
+that do not use hierarchy. CLI management is still a separate pending adapter.
+This roadmap does not authorize a different delegation architecture.
 
-`REGRESSION_BASELINE.md` remains the standing compatibility gate for implementation PRs and must be revalidated when upstream changes relevant behavior.
+Automatic fallback and 30-minute primary recovery probes remain disabled.
+The [credential boundary audit](./CODEX_CREDENTIAL_BOUNDARY.md) records an external
+producer-observability dependency, not permission to replace Codex, inspect user
+secrets or require paid API keys. Continue independent work while that dependency
+is unresolved; do not claim a complete fallback feature from control-plane tests.
 
-Implementation-time revalidation found upstream database rules that prohibit new foreign keys/cascades and require every new index to use its own concurrent-index migration. [`ADR-014`](./adr/ADR-014-upstream-compatibility-strategy.md) remains authoritative for fork implementation while preserving the semantic invariants of earlier hierarchy ADRs.
-
-The next product implementation milestone is HIER-004. Before adding a public hierarchy API, inspect the current upstream handler/router/types/error conventions and design the adapter around `server/internal/projecthierarchy` rather than duplicating mutation logic in handlers.
+`REGRESSION_BASELINE.md` remains the standing compatibility gate. Revalidate
+current upstream behavior before each affected product change. ADR-014/015 keep
+new relationships application-owned, forbid new FKs/cascades and reserve fork
+migration numbering with separate concurrent-index migrations.
 
 ## Repository Operating Model
 

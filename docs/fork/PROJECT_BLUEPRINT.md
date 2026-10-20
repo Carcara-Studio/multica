@@ -1,12 +1,12 @@
 # Multica Fork — Project Blueprint
 
-> **Status:** Foundation complete / Project Hierarchy core write domain implemented  
-> **Fork:** `Carcara-Studio/multica`  
-> **Upstream:** `multica-ai/multica`  
-> **Reference project:** `paperclipai/paperclip`  
-> **Latest revalidated upstream baseline:** `83527872634824012dd26bb183aa216fab631c05`  
-> **Snapshot date:** 2026-10-15  
-> **Current phase:** MFK-008 roadmap/governance reconciliation → HIER-004 next
+> **Status:** Hierarchy API/management clients implemented; runtime semantics pending; automatic failover disabled
+> **Fork:** `Carcara-Studio/multica`
+> **Upstream:** `multica-ai/multica`
+> **Reference project:** `paperclipai/paperclip`
+> **Latest revalidated upstream baseline:** `47120a4131564175da044d63d897ed9b5d76979a`
+> **Snapshot date:** 2026-10-20
+> **Current phase:** Independent hierarchy runtime-context work; failover producer/adapter and execution gates remain open
 
 ---
 
@@ -914,7 +914,7 @@ MFK-004 — Record hierarchy ADRs                                        DONE
 MFK-005 — Record failover ADRs                                         DONE
 MFK-006 — Establish upstream regression baseline                       DONE
 MFK-007 — Activate Project Hierarchy implementation                    DONE
-MFK-008 — Reconcile hierarchy roadmap and autonomous workflow          IN PROGRESS
+MFK-008 — Reconcile hierarchy roadmap and autonomous workflow          DONE (#20)
 ```
 
 ### Hierarchy
@@ -923,20 +923,32 @@ MFK-008 — Reconcile hierarchy roadmap and autonomous workflow          IN PROG
 HIER-001 — Introduce Project hierarchy schema                          DONE
 HIER-002 — Implement authoritative ProjectHierarchyService             DONE
 HIER-003 — Enforce cycle-safe concurrent mutations                     DONE / SUBSUMED BY HIER-002
-HIER-004 — Implement hierarchy API                                     NEXT
-HIER-005 — Implement hierarchy CLI
-HIER-006 — Add Project hierarchy briefing
-HIER-007 — Add hierarchy-aware delegation
-HIER-008 — Integrate completion wakeups
-HIER-009 — Add escalation semantics
-HIER-010 — Protect Agent archive from hierarchy corruption
-HIER-011 — Add Project hierarchy Web UI
-HIER-012 — Add Mobile hierarchy support
+HIER-004 — Project hierarchy API                                      DONE (#22)
+HIER-005 — Shared web/desktop hierarchy management UI                   DONE (#32)
+Mobile parity — Issue #28 (HIER-005M), PR #33 (HIER-006)                DONE
 ```
 
-HIER-001 is Issue #14. HIER-002 is Issue #17. Its accepted scope deliberately absorbed the Project-row serialization, full final-tree/cycle validation and concurrent mutation tests originally listed as HIER-003. Therefore HIER-003 is a completed roadmap milestone, not a second implementation of the same mutation domain.
+HIER-001 is Issue #14. HIER-002 is Issue #17; its Project-row serialization,
+complete final-tree validation and concurrent mutation tests already satisfy
+HIER-003. HIER-004 is closed Issue #21. Shared UI is closed Issue #27 and native
+mobile parity is closed Issue #28. Their implementations must not be rebuilt.
 
-The next product implementation work is HIER-004. It must expose hierarchy behavior through a narrow adapter around the authoritative `server/internal/projecthierarchy` service rather than moving business rules into handlers.
+Earlier candidate labels assigned HIER-005 to CLI and HIER-006 to briefing, but
+subsequent delivered issues/PRs used those labels for UI/mobile work. Keep that
+history explicit rather than treating the old labels as pending implementation
+IDs. Remaining hierarchy work is described by scope until a focused Issue assigns
+an unambiguous identifier:
+
+- execution briefing context, using current Project-scoped memberships;
+- direct-report delegation, existing completion wakeups and escalation;
+- Agent archive/removal safeguards under ADR-006;
+- a hierarchy CLI adapter, if scheduled.
+
+The next independent product slice is briefing context. Reinspect current claim,
+briefing and Issue integration points and the HIER-GAP regressions before changing
+runtime behavior. Preserve no-Project/direct-Agent/Squad defaults and existing
+structural service ownership. API and web/desktop/mobile management are complete
+slices, not proof that runtime delegation/escalation is implemented.
 
 ### Failover
 
@@ -958,7 +970,20 @@ FAIL-014 — Add failover concurrency test suite
 FAIL-015 — Add upstream regression suite
 ```
 
-Implementation ordering remains hierarchy first, failover second, unless new evidence changes the dependency picture.
+The list above describes end-to-end failover scope, not fifteen unstarted
+implementations. ADR-016–030 already implement substantial isolated policy,
+persistence, configuration/lifecycle invalidation and evidence/observation
+foundations. Parent Issue #37 remains open: production adapter approval, complete
+writer/retry/claim wiring, quota activation, isolated minimal-inference probes and
+recovery are still required. Automatic fallback/probes remain disabled.
+
+The inspected Codex producer does not export effective credential selection
+bound to the model request through its account interfaces. See
+[CODEX_CREDENTIAL_BOUNDARY.md](./CODEX_CREDENTIAL_BOUNDARY.md) for source pin,
+limitations and future acceptance requirements. This dependency can block Codex
+adapter approval without blocking independent hierarchy integration. It does not
+justify lowering evidence requirements, reading more user secrets, replacing the
+installed runtime or requiring paid API keys.
 
 ---
 
@@ -1086,30 +1111,30 @@ Development may later move to a controlled Multica Squad and eventually dogfood 
 
 ## 25. Current Foundation / Hierarchy Status
 
-Completed in repository history:
+Reconciled on 2026-10-20 against current code and merged history:
 
-```text
-MFK-001 — fork baseline and origin/upstream setup
-MFK-002 — main protection, governance, upstream sync policy
-MFK-003 — repository-resident architecture and ADR conventions
-MFK-004 — Project Hierarchy ADR-001 through ADR-006 accepted
-MFK-005 — Primary/Fallback ADR-007 through ADR-013 accepted
-MFK-006 — Upstream regression baseline and pre-implementation gates established
-MFK-007 — Project Hierarchy implementation activated under ADR-014
-HIER-001 — Project hierarchy persistence/lifecycle cleanup merged as b18922193e78e4ef898a1737f55c422bda2aefb7
-HIER-002 — authoritative hierarchy mutation service merged as 2a2cdde768078f6ad026eff6d6a503b359747351
-HIER-003 — cycle-safe concurrent mutation milestone satisfied by HIER-002
-```
+| Scope | Evidence |
+| --- | --- |
+| Foundation/governance/ADRs | MFK-001–008 complete; #20 closed MFK-008 |
+| Hierarchy persistence | #16, `server/pkg/db/queries/project_hierarchy.sql` and reserved fork migrations |
+| Authoritative mutations/concurrency | #18, `server/internal/projecthierarchy` |
+| Project hierarchy API | #22, `server/internal/handler/project_hierarchy.go`, `server/cmd/server/router.go` |
+| Shared web/desktop management | #32, `packages/core/api/project-hierarchy.ts`, `packages/views/projects/components/project-hierarchy-section.tsx` |
+| Native mobile parity | #33, `apps/mobile/data/project-hierarchy-api.ts`, native Project detail and hierarchy routes |
+| Failover control-plane and observation foundations | ADR-016–030; current gate inventory in `FAIL-001_INVESTIGATION.md` |
+| Effective credential dependency | #70, `CODEX_CREDENTIAL_BOUNDARY.md`; actual credential observer is not implemented |
 
-Latest revalidated upstream `main` at the HIER-002 final gate:
+The API and clients delegate structural mutation authority to the existing
+hierarchy service. They do not enable hierarchy-aware task execution, delegation,
+escalation or Agent archive semantics. Those integration slices require focused
+Issues, current upstream call-site review and regression gates before code changes.
 
-```text
-83527872634824012dd26bb183aa216fab631c05
-```
-
-HIER-002 preserves public API/CLI/UI/runtime/daemon/Squad/failover behavior and isolates the new write domain under `server/internal/projecthierarchy` plus hierarchy-owned SQLC queries.
-
-MFK-008 reconciles repository governance and roadmap documentation with this implemented state. After MFK-008, the immediate next product milestone is HIER-004: design and implement the Project hierarchy API against the current upstream handler/router/type/error conventions while delegating all structural mutations to the authoritative hierarchy service.
+Current revalidated Multica upstream is
+`47120a4131564175da044d63d897ed9b5d76979a`, retained in fork ancestry. The old
+`8352787` value was the historical HIER-002 gate, not the current baseline.
+Automatic fallback and recovery remain disabled while the separate producer,
+adapter, routing and inference guarantees are unresolved. The next independent
+hierarchy slice is briefing context; rebuilding HIER-004 is not pending work.
 
 ---
 
