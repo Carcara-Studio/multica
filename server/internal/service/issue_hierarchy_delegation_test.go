@@ -17,11 +17,12 @@ import (
 )
 
 type hierarchyCreateFixture struct {
-	fx     *testutil.Fixture
-	svc    *IssueService
-	p      IssueCreateParams
-	opts   IssueCreateOpts
-	events atomic.Int32
+	runtimeID pgtype.UUID
+	fx        *testutil.Fixture
+	svc       *IssueService
+	p         IssueCreateParams
+	opts      IssueCreateOpts
+	events    atomic.Int32
 }
 
 func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
@@ -32,8 +33,8 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	fx.WorkspaceID = fx.Workspace(t, "hierarchy create", "hierarchy-create-"+uuid.NewString())
 	fx.Member(t, fx.WorkspaceID, fx.UserID, "owner")
 	project := util.MustParseUUID(fx.Project(t, "delegation"))
-	source := util.MustParseUUID(fx.Agent(t, "source", ""))
 	runtime := fx.Runtime(t, "fixture-only runtime")
+	source := util.MustParseUUID(fx.Agent(t, "source", runtime))
 	target := util.MustParseUUID(fx.Agent(t, "target", runtime))
 	workspace := util.MustParseUUID(fx.WorkspaceID)
 	q := db.New(pool)
@@ -55,9 +56,9 @@ func newHierarchyCreateFixture(t *testing.T) *hierarchyCreateFixture {
 	}))
 	fx.Exec(t, "UPDATE workspace SET issue_counter = 1 WHERE id = $1", workspace)
 	task := util.MustParseUUID(fx.Task(t, util.UUIDToString(source), testutil.Cols{
-		"issue_id": parent, "status": "running", "originator_user_id": fx.UserID, "accountable_user_id": fx.UserID,
+		"issue_id": parent, "status": "running", "runtime_id": runtime, "originator_user_id": fx.UserID, "accountable_user_id": fx.UserID,
 	}))
-	f := &hierarchyCreateFixture{fx: fx}
+	f := &hierarchyCreateFixture{fx: fx, runtimeID: util.MustParseUUID(runtime)}
 	bus := events.New()
 	bus.Subscribe(protocol.EventIssueCreated, func(events.Event) { f.events.Add(1) })
 	f.svc = NewIssueService(q, pool, bus, nil, &TaskService{Queries: q, TxStarter: pool, Bus: bus})
@@ -140,7 +141,7 @@ func TestHierarchyCreateReplayConcurrentAndFollowup(t *testing.T) {
 	// Origin lineage from a different turn must not change the operation identity.
 	f.fx.Exec(t, "UPDATE agent_task_queue SET status = 'completed' WHERE id = $1", f.p.OriginID)
 	f.p.OriginID = util.MustParseUUID(f.fx.Task(t, util.UUIDToString(f.p.CreatorID), testutil.Cols{
-		"issue_id": f.p.ParentIssueID, "status": "running",
+		"issue_id": f.p.ParentIssueID, "status": "running", "runtime_id": f.runtimeID,
 		"originator_user_id": f.fx.UserID, "accountable_user_id": f.fx.UserID,
 	}))
 	replay, err := f.create()
