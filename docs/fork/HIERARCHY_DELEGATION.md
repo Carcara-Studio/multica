@@ -21,11 +21,18 @@ cross-Project delegation are rejected. Mention and Squad routing are unchanged.
 
 The caller retains these locks until commit/rollback:
 
-1. workspace `FOR KEY SHARE`, fencing workspace teardown;
+1. workspace `FOR NO KEY UPDATE`, fencing teardown and serializing with the native Issue counter before Project locks;
 2. Project structural `FOR UPDATE`, using the existing hierarchy writer protocol;
 3. parent Issue `FOR UPDATE`, freezing its Project/assignment;
 4. relevant Agent rows `FOR SHARE` in UUID order, freezing archive/owner/config
    changes to those rows.
+
+The workspace lock is intentionally stronger than a lifetime key-share fence:
+ordinary Issue creation holds its counter row before INSERT checks Project
+foreign keys. Taking Project first and upgrading workspace later would permit an
+inverted wait. The gate acquires the counter-compatible lock first; it does not
+increment the counter. This serializes admission with other workspace Issue
+creates and is a deliberate contention cost.
 
 Call before taking Issue/property/Agent/counter locks. Future integration must
 review the complete upstream create/teardown/permission lock graph; this order
@@ -68,6 +75,7 @@ archived relevant Agents/memberships; invalid identity and absent transaction.
 Separate transactions attempt conflicting row locks with NOWAIT and must receive
 55P03 while the caller retains admission. After caller commit/rollback, those
 locks are available; an actual reparent then invalidates the old relation.
+A busy native workspace counter blocks admission before Project acquisition.
 The gate creates neither child Issues nor queue rows.
 
 No local execution environment is available. Compile/vet/full PostgreSQL/race

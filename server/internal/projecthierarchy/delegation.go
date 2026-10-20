@@ -49,9 +49,11 @@ func CheckDelegationRelation(ctx context.Context, tx pgx.Tx, in DelegationRelati
 		return empty, domainError(CodeDelegationNotAllowed, "direct-report delegation relation unavailable")
 	}
 	var workspace pgtype.UUID
-	// Fence workspace deletion before taking descendant locks. This is the same
-	// key-share/delete exclusion used by other application-owned relationships.
-	if err := tx.QueryRow(ctx, "SELECT id FROM workspace WHERE id = $1 FOR KEY SHARE", in.WorkspaceID).Scan(&workspace); err != nil {
+	// Serialize with the native Issue counter before taking Project locks. A
+	// key-share lock alone would allow a counter writer to hold workspace while
+	// waiting for our Project FK lock, reversing a future child-create order.
+	// This also fences workspace teardown.
+	if err := tx.QueryRow(ctx, "SELECT id FROM workspace WHERE id = $1 FOR NO KEY UPDATE", in.WorkspaceID).Scan(&workspace); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return deny()
 		}

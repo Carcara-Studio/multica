@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -218,3 +219,39 @@ func TestDelegationRelationRequiresTransaction(t *testing.T) {
 	}
 }
 
+
+func TestDelegationRelationWaitsForNativeCounterBeforeProject(t *testing.T) {
+	pool := openHierarchyTestPool(t)
+	ctx := context.Background()
+	f := newHierarchyServiceFixture(t, pool)
+	source, targetAgent := f.agent(t, "Manager"), f.agent(t, "Report")
+	root := f.createMembership(t, source, pgtype.UUID{}, "Lead")
+	f.createMembership(t, targetAgent, root.ID, "Report")
+	parent := delegationTestParent(t, f, source)
+	counter, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer counter.Rollback(ctx)
+	var id pgtype.UUID
+	if err := counter.QueryRow(ctx, "SELECT id FROM workspace WHERE id = $1 FOR NO KEY UPDATE", f.workspaceID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	wait, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err = CheckDelegationRelation(wait, tx, DelegationRelationInput{
+		WorkspaceID: f.workspaceID, ProjectID: f.projectID, ParentID: parent,
+		DelegatorID: source, TargetID: targetAgent,
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("admission bypassed the active Issue counter writer: %v", err)
+	}
+	if err := counter.QueryRow(ctx, "SELECT id FROM project WHERE id = $1 FOR KEY SHARE NOWAIT", f.projectID).Scan(&id); err != nil {
+		t.Fatalf("counter writer could not check its Project reference: %v", err)
+	}
+}
