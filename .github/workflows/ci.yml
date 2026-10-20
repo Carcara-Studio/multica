@@ -568,7 +568,7 @@ jobs:
         # the backend job still runs the full package on Linux.
         # -v so a silent skip (no PowerShell host resolved, or a -run pattern
         # that stops matching) is visible in the log instead of passing as "ok".
-        run: go test ./pkg/agent -v -run '^(TestCursorExecutePromptSurvivesPowerShellShim|TestPiExecutePromptSurvivesPowerShellShim|TestQwenExecutePromptSurvivesPowerShellShim|TestPlatformCursorInvocation|TestPlatformCopilotInvocation|TestPlatformPiInvocation|TestPlatformQwenInvocation)' -count=1 -timeout=5m
+        run: go test ./pkg/agent -v -run '^(TestCursorExecutePromptSurvivesPowerShellShim|TestPiExecutePromptSurvivesPowerShellShim|TestQwenExecutePromptSurvivesPowerShellShim|TestPlatformCursorInvocation|TestPlatformCopilotInvocation|TestPlatformPiInvocation|TestPlatformQwenInvocation|TestCodexStdin)' -count=1 -timeout=5m
 
       - name: Test Windows OpenCode oversized prompt reaches stdin
         working-directory: server

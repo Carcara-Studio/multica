@@ -61,8 +61,9 @@ metadata, including email/plan, but no opaque generation for effective credentia
 selection. The new observer does not call that API or inspect credential files,
 keychains or environment secrets. No credential epoch is produced. Effective
 credential observation remains unresolved; account metadata must not be promoted
-into credential authority. The inherited blocking stdin Write/post-receipt parser
-limit from ADR-028 also remains an execution-adapter gate.
+into credential authority. ADR-030 subsequently resolves the inherited blocking Write for actual owned
+process stdin. The post-receipt parser limit and independent credential/complete
+execution guarantees still apply.
 
 No production adapter is approved, no EvidenceReport/ExecutionIdentity is created,
 and no public optional-policy route, automatic fallback or primary probe is

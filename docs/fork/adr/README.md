@@ -192,6 +192,7 @@ ADR-026 — Protected RPC evidence exchange transaction boundary
 ADR-027 — Upstream runtime privacy revocation
 ADR-028 — Codex layered configuration observation
 ADR-029 — Codex thread selection acknowledgement
+ADR-030 — Cancellable owned Codex stdin writes
 ```
 
 ### Governance

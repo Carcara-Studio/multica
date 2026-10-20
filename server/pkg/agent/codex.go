@@ -1196,11 +1196,18 @@ func (b *codexBackend) executeOnce(ctx context.Context, prompt string, opts Exec
 		stopProcess()
 		return nil, fmt.Errorf("codex stdout pipe: %w", err)
 	}
-	stdin, err := cmd.StdinPipe()
+	rawStdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
 		stopProcess()
 		return nil, fmt.Errorf("codex stdin pipe: %w", err)
+	}
+	stdin, ok := rawStdin.(*os.File)
+	if !ok {
+		_ = rawStdin.Close()
+		cancel()
+		stopProcess()
+		return nil, errCodexStdinWrite
 	}
 	// Codex stderr can contain auth/provider diagnostics. Capture a bounded
 	// tail and emit it only through the sanitizer in the cleanup event.
@@ -1270,8 +1277,11 @@ func (b *codexBackend) executeOnce(ctx context.Context, prompt string, opts Exec
 	}
 
 	c = &codexClient{
-		cfg:                      b.cfg,
-		stdin:                    stdin,
+		cfg: b.cfg,
+		stdin: newCodexStdin(stdin, func() {
+			stopProcess()
+			c.markProcessExited(errCodexStdinWrite)
+		}),
 		pending:                  make(map[int]*pendingRPC),
 		processDone:              make(chan struct{}),
 		handshakeTimeout:         handshakeTimeout,
@@ -2739,10 +2749,13 @@ func (c *codexClient) requestRPC(ctx context.Context, method string, params any,
 		return nil, err
 	}
 	data = append(data, '\n')
-	if _, err := c.stdin.Write(data); err != nil {
+	if _, err := c.writeRPCFrame(requestCtx, data); err != nil {
 		c.mu.Lock()
 		delete(c.pending, id)
 		c.mu.Unlock()
+		if requestCtx.Err() != nil {
+			return nil, codexRequestContextError(requestCtx)
+		}
 		return nil, fmt.Errorf("write %s: %w", method, err)
 	}
 	if method == "turn/start" {

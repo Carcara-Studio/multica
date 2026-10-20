@@ -68,9 +68,8 @@ func (o *codexConfigObserver) observe(ctx context.Context) (codexConfigObservati
 	if o == nil || o.codexConfigObserverState == nil {
 		return codexConfigObservation{}, errCodexConfigObservation
 	}
-	// This bounds response waiting through the existing RPC implementation.
-	// Its stdin Write can still block; future execution admission needs a
-	// cancellable transport before this can become an approved adapter.
+	// The owned process stdin honors this cancellation (ADR-030). Legacy
+	// in-memory test writers are not proof of bounded production I/O.
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	o.mu.Lock()
