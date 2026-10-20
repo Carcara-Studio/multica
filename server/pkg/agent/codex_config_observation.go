@@ -76,6 +76,7 @@ func (o *codexConfigObserver) observe(ctx context.Context) (codexConfigObservati
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	reject := func() (codexConfigObservation, error) {
+		o.client.invalidateCodexThreadObservation(false)
 		o.digest = [sha256.Size]byte{}
 		o.current = codexConfigObservation{}
 		return codexConfigObservation{}, errCodexConfigObservation

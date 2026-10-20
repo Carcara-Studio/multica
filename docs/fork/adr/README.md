@@ -191,6 +191,7 @@ ADR-025 — Durable single-consumption execution evidence challenges
 ADR-026 — Protected RPC evidence exchange transaction boundary
 ADR-027 — Upstream runtime privacy revocation
 ADR-028 — Codex layered configuration observation
+ADR-029 — Codex thread selection acknowledgement
 ```
 
 ### Governance
