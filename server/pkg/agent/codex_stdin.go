@@ -10,9 +10,7 @@ import (
 
 var errCodexStdinWrite = errors.New("codex stdin transport unavailable")
 
-// The real process stdin is an os.Pipe writer, which supports I/O deadlines on
-// the supported platforms. Never turn a failed deadline into an unbounded Write.
-// The gate serializes whole frames and their deadline/reset callbacks.
+// The gate serializes whole frames and their platform cancellation callbacks.
 type codexStdin struct {
 	pipe    *os.File
 	gate    chan struct{}
@@ -48,28 +46,15 @@ func (w *codexStdin) WriteContext(parent context.Context, data []byte) (int, err
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	fail := func() { w.once.Do(func() { _ = w.pipe.Close(); w.abort() }) }
-	// Use the context timer as the cancellation source so handshake/parent
-	// causes are already established when the pipe reports its deadline.
-	if err := w.pipe.SetWriteDeadline(time.Time{}); err != nil {
+	fail := func() { w.once.Do(func() { w.abort(); _ = w.pipe.Close() }) }
+	info, err := w.pipe.Stat()
+	if err != nil || info.Mode()&os.ModeNamedPipe == 0 {
 		fail()
 		return 0, errCodexStdinWrite
 	}
-	callbackDone := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() {
-		defer close(callbackDone)
-		_ = w.pipe.SetWriteDeadline(time.Now())
-	})
-	n, err := w.pipe.Write(data)
-	// Join a callback that already started before clearing the deadline. Otherwise
-	// a late cancellation could poison the next frame after it acquires the gate.
-	if !stop() {
-		<-callbackDone
-	}
-	resetErr := w.pipe.SetWriteDeadline(time.Time{})
-	if err != nil || n != len(data) || resetErr != nil {
-		// Even a zero-byte failure may leave peer/process state uncertain. Retire the
-		// owned transport rather than send another JSON frame onto a damaged stream.
+	n, err := writeCodexPipe(ctx, w.pipe, data, fail)
+	if err != nil || n != len(data) {
+		// An incomplete frame makes this stream unsafe for subsequent requests.
 		fail()
 		if ctx.Err() != nil {
 			return n, ctx.Err()

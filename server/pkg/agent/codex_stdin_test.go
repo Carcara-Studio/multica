@@ -21,11 +21,8 @@ func codexStdinPipe(t *testing.T, abort func()) (*os.File, *codexStdin) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = r.Close(); _ = p.Close() })
-	if err := r.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	return r, newCodexStdin(p, abort)
+	t.Cleanup(func() { _ = p.Close(); _ = r.Close() })
+	return r, newCodexStdin(p, func() { _ = r.Close(); abort() })
 }
 
 type codexStdinResult struct {
@@ -178,7 +175,7 @@ func TestCodexStdinRejectsUnsupportedAndPreCancelledWrites(t *testing.T) {
 	var aborts atomic.Int32
 	w := newCodexStdin(file, func() { aborts.Add(1) })
 	if _, err := w.Write([]byte("private-content")); err != errCodexStdinWrite || aborts.Load() != 1 {
-		t.Fatal("unsupported deadline fell back to unbounded I/O or leaked an error")
+		t.Fatal("unsupported destination reached I/O or leaked an error")
 	}
 	info, err := os.Stat(path)
 	if err != nil || info.Size() != 0 {

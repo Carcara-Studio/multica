@@ -17,25 +17,31 @@ therefore could not claim a bounded call merely by wrapping its request context.
 Wrap the actual os.File pipe returned by the existing exec.Cmd.StdinPipe. Reuse
 the existing process cancellation/tree ownership and lifecycle/reaping; do not
 spawn a second process or a background writer goroutine. A context-aware gate
-serializes complete frames with their deadline callbacks. RPC writes inherit the
+serializes complete frames with their cancellation callbacks. RPC writes inherit the
 request context, including its handshake cause. All writes also have a fixed
 30-second ceiling, including notifications and server-request replies without a
 caller context. Caller deadlines may shorten that ceiling; it is not a new
 public runtime/profile setting.
 
-Probe pipe deadline support before sending bytes. context.AfterFunc expires the
-write deadline when cancellation fires. Join any callback already started before
-clearing the deadline/releasing the gate, so a late cancellation cannot poison a
+Reject non-pipe destinations before writing. On pollable POSIX pipes,
+context.AfterFunc expires the write deadline when cancellation fires. Windows
+StdinPipe handles use synchronous CreatePipe I/O and reject deadlines. Pin the
+writer to its OS thread, open that thread with THREAD_TERMINATE access, and use
+CancelSynchronousIo from the cancellation callback. Retry while the pinned write
+is outstanding, including the race before WriteFile starts. If native cancellation
+fails unexpectedly, retire the owned process/pipe. Join any callback already
+started before clearing deadlines (POSIX) or releasing the OS thread (Windows)
+and the frame gate. Native cancellation therefore cannot reach a
 subsequent frame. Cancellation while waiting for the gate sends no bytes and does
 not abort another caller's frame. Pre-cancelled calls similarly preserve a
 healthy transport. A complete write that races cancellation returns the context
 error; later RPC lifecycle/cleanup remains authoritative.
 
-An attempted write that fails, short-writes or cannot reset its deadline closes
-the owned pipe and cancels its process exactly once. Even a zero-byte I/O failure
+An attempted write that fails, short-writes or cannot reset its deadline cancels
+its owned process and closes the pipe exactly once. Even a zero-byte I/O failure
 can indicate an unusable peer; never append another JSON frame to that stream.
 Mark the real client exited to release pending requests and revoke observation
-liveness. Never fall back to unbounded I/O if a real pipe rejects deadlines. Keep
+liveness. Never fall back to unbounded I/O if cancellation setup fails. Keep
 errors static and preserve parent cancellation versus handshake-timeout
 classification, including the initialize-retry safety rules. Graceful EOF and
 existing reap/descendant cleanup remain in the existing executor.
@@ -48,16 +54,19 @@ wire bytes, options, resume behavior and response parsing remain unchanged.
 
 ## Platform evidence and verification
 
-The repository uses Go 1.26.9. Its os.File documentation permits deadlines on
-pollable pipes. Its Windows os.Pipe implementation creates nonblocking pipe
-handles, and the poll FD closes/evicts pending pipe I/O. The implementation follows
-the standard context.AfterFunc connection example's callback-stop/join/reset
-pattern. Inspected local runtime sources correspond to these official references:
+The repository uses Go 1.26.9. POSIX follows the standard context.AfterFunc
+connection example's callback-stop/join/reset pattern. Windows uses Microsoft's
+synchronous cancellation API with thread ownership retained through callback
+completion. The required Windows pipe tests rejected an earlier deadline-only
+implementation; synchronous handles require this separate implementation.
+Inspected runtime sources and API references:
 
 - https://github.com/golang/go/blob/go1.26.9/src/context/example_test.go
-- https://github.com/golang/go/blob/go1.26.9/src/os/file.go
 - https://github.com/golang/go/blob/go1.26.9/src/os/file_windows.go
+- https://github.com/golang/go/blob/go1.26.9/src/syscall/syscall_windows.go
 - https://github.com/golang/go/blob/go1.26.9/src/internal/poll/fd_windows.go
+- https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelsynchronousio
+- https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations
 
 Tests use actual OS pipes and fake owner-abort hooks: blocked write cancellation
 and deadlines, fixed background-write ceiling, queued cancellation without
