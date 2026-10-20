@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -144,9 +143,9 @@ func TestDelegationRelationRetainsCallerTransactionLocks(t *testing.T) {
 			}{
 				{"SELECT id FROM workspace WHERE id = $1 FOR UPDATE NOWAIT", f.workspaceID},
 				{"SELECT id FROM project WHERE id = $1 FOR UPDATE NOWAIT", f.projectID},
-				{"SELECT id FROM issue WHERE id = $1 FOR UPDATE NOWAIT", parent},
-				{"SELECT id FROM agent WHERE id = $1 FOR UPDATE NOWAIT", source},
-				{"SELECT id FROM agent WHERE id = $1 FOR UPDATE NOWAIT", targetAgent},
+				{"SELECT id FROM issue WHERE id = $1 FOR NO KEY UPDATE NOWAIT", parent},
+				{"SELECT id FROM agent WHERE id = $1 FOR NO KEY UPDATE NOWAIT", source},
+				{"SELECT id FROM agent WHERE id = $1 FOR NO KEY UPDATE NOWAIT", targetAgent},
 			}
 			for _, lock := range locks {
 				other, err := pool.Begin(ctx)
@@ -242,13 +241,15 @@ func TestDelegationRelationWaitsForNativeCounterBeforeProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx)
-	wait, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
-	_, err = CheckDelegationRelation(wait, tx, DelegationRelationInput{
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '100ms'"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = CheckDelegationRelation(ctx, tx, DelegationRelationInput{
 		WorkspaceID: f.workspaceID, ProjectID: f.projectID, ParentID: parent,
 		DelegatorID: source, TargetID: targetAgent,
 	})
-	if !errors.Is(err, context.DeadlineExceeded) {
+	var busy *pgconn.PgError
+	if !errors.As(err, &busy) || busy.Code != "55P03" {
 		t.Fatalf("admission bypassed the active Issue counter writer: %v", err)
 	}
 	if err := counter.QueryRow(ctx, "SELECT id FROM project WHERE id = $1 FOR KEY SHARE NOWAIT", f.projectID).Scan(&id); err != nil {

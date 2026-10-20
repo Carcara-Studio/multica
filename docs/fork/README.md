@@ -58,7 +58,7 @@ current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
 management remains a separate pending adapter. This roadmap does not authorize a
 different delegation architecture.
 
-The next delegation prerequisite (#75) is a transaction-owned direct-report
+An internal delegation prerequisite (#75) adds a transaction-owned direct-report
 relation gate. See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). It freezes
 the relevant structural rows but does not authenticate a caller, approve target
 invocation/runtime eligibility or create a child Issue. Native Issue-create

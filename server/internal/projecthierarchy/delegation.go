@@ -27,10 +27,10 @@ type DelegationRelationInput struct {
 // authentication, invocation/runtime approval, idempotency or an execution
 // lease, and must never authorize a later transaction without rechecking.
 type DelegationRelation struct {
-	ParentID               pgtype.UUID
-	ProjectID              pgtype.UUID
-	DelegatorMembershipID  pgtype.UUID
-	TargetMembershipID     pgtype.UUID
+	ParentID              pgtype.UUID
+	ProjectID             pgtype.UUID
+	DelegatorMembershipID pgtype.UUID
+	TargetMembershipID    pgtype.UUID
 }
 
 // CheckDelegationRelation locks and validates one direct edge inside the
