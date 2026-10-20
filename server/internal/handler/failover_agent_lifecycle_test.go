@@ -120,14 +120,18 @@ func TestAgentEnvAndArchiveUseAtomicInvalidation(t *testing.T) {
 }
 
 func TestAgentInvalidationFailureRollsBackMutationAndEnvAudit(t *testing.T) {
-	for _, kind := range []string{"model", "env", "archive"} {
+	for _, kind := range []string{"model", "env", "archive", "runtime"} {
 		t.Run(kind, func(t *testing.T) {
-			fx, id, _, _ := probingAgentForMutation(t, nil)
+			fx, id, runtime, _ := probingAgentForMutation(t, nil)
 			// A valid bigint at its ceiling makes rotation fail AFTER the Agent
 			// and (for env) audit writes, without installing shared test triggers.
 			fx.Exec(t, `UPDATE agent_failover_state SET version=$1 WHERE agent_id=$2`, int64(math.MaxInt64), id)
 			old := mutationState(t, id)
 			switch kind {
+			case "runtime":
+				next := fx.Runtime(t, "Rollback target", testutil.Cols{"provider": "claude"})
+				req := withURLParam(newRequest(http.MethodPatch, "/api/agents/"+id, map[string]any{"runtime_id": next}), "id", id)
+				testutil.Call(t, testHandler.UpdateAgent, req).Want(http.StatusInternalServerError)
 			case "model":
 				req := withURLParam(newRequest(http.MethodPatch, "/api/agents/"+id, map[string]any{"model": "claude-new"}), "id", id)
 				testutil.Call(t, testHandler.UpdateAgent, req).Want(http.StatusInternalServerError)
@@ -138,7 +142,11 @@ func TestAgentInvalidationFailureRollsBackMutationAndEnvAudit(t *testing.T) {
 				req := withURLParam(newRequest(http.MethodPost, "/api/agents/"+id+"/archive", nil), "id", id)
 				testutil.Call(t, testHandler.ArchiveAgent, req).Want(http.StatusInternalServerError)
 			}
-			var model, env string
+			var model, env, currentRuntime string
+			fx.QueryRow(t, `SELECT runtime_id FROM agent WHERE id=$1`, id).Scan(&currentRuntime)
+			if currentRuntime != runtime {
+				t.Fatal("failed invalidation committed runtime binding")
+			}
 			var archived bool
 			var audits int
 			fx.QueryRow(t, `SELECT model,custom_env->>'KEY',archived_at IS NOT NULL FROM agent WHERE id=$1`, id).Scan(&model, &env, &archived)

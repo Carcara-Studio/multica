@@ -56,6 +56,28 @@ func InvalidateAgentPolicies(ctx context.Context, q *db.Queries, agents []db.Age
 	return nil
 }
 
+// InvalidateRuntimeVisibility runs after all revocation owner/task/chat/audit
+// writes. Callers have captured and locked primary and fallback references in
+// Agent order. The runtime owner's policy keeps access; other owners lose both
+// primary and fallback authority when the runtime becomes private. No implicit
+// resume occurs when it becomes public again.
+func InvalidateRuntimeVisibility(ctx context.Context, q *db.Queries, agents []db.Agent, runtime db.AgentRuntime) error {
+	ordered := slices.Clone(agents)
+	slices.SortFunc(ordered, func(a, b db.Agent) int { return bytes.Compare(a.ID.Bytes[:], b.ID.Bytes[:]) })
+	var previous pgtype.UUID
+	for _, a := range ordered {
+		if a.ID == previous {
+			continue
+		}
+		previous = a.ID
+		suspend := runtime.Visibility == "private" && a.OwnerID != runtime.OwnerID
+		if err := invalidateAgentPolicy(ctx, q, a, suspend); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func invalidateAgentPolicy(ctx context.Context, q *db.Queries, a db.Agent, suspend bool) error {
 	state, err := q.GetAgentFailoverState(ctx, db.GetAgentFailoverStateParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID})
 	if errors.Is(err, pgx.ErrNoRows) {

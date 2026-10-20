@@ -261,16 +261,55 @@ func TestCrossReferencedRuntimePoliciesLockAgentsInOneOrder(t *testing.T) {
 	old2 := mutationState(t, second)
 	fallbackConfigForMutation(t, fx, first, r2)
 	fallbackConfigForMutation(t, fx, second, r1)
+	type result struct {
+		runtime  string
+		response *testutil.Response
+	}
+	results := make(chan result, 2)
+	change := func(runtime string) *testutil.Response {
+		req := withURLParam(newRequest(http.MethodPatch, "/", map[string]any{"visibility": "public"}), "runtimeId", runtime)
+		ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+		defer cancel()
+		return testutil.Call(t, testHandler.UpdateAgentRuntime, req.WithContext(ctx))
+	}
 	var wg sync.WaitGroup
 	for _, runtime := range []string{r1, r2} {
-		wg.Go(func() {
-			req := withURLParam(newRequest(http.MethodPatch, "/", map[string]any{"visibility": "public"}), "runtimeId", runtime)
-			ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
-			defer cancel()
-			testutil.Call(t, testHandler.UpdateAgentRuntime, req.WithContext(ctx)).Want(http.StatusOK)
-		})
+		wg.Go(func() { results <- result{runtime, change(runtime)} })
 	}
 	wg.Wait()
+	close(results)
+	var busy []string
+	succeeded := int64(0)
+	for result := range results {
+		if result.response.Code == http.StatusConflict {
+			var body struct {
+				Code string `json:"code"`
+			}
+			result.response.JSON(&body)
+			if body.Code != "runtime_access_revocation_busy" {
+				t.Fatalf("unexpected conflict: %s", body.Code)
+			}
+			busy = append(busy, result.runtime)
+		} else {
+			result.response.Want(http.StatusOK)
+			succeeded++
+		}
+	}
+	if succeeded == 0 {
+		t.Fatal("neither ordered Agent acquisition made progress")
+	}
+	if mutationState(t, first).Version != old1.Version+succeeded || mutationState(t, second).Version != old2.Version+succeeded {
+		t.Fatal("busy transition committed partial invalidation")
+	}
+	// NOWAIT deliberately replaces the old wait-to-success contract. Retry
+	// only identified busy operations after both writers have released locks.
+	for _, runtime := range busy {
+		rt, err := testHandler.Queries.GetAgentRuntime(t.Context(), parseUUID(runtime))
+		if err != nil || rt.Visibility != "private" {
+			t.Fatal("busy transition committed visibility")
+		}
+		change(runtime).Want(http.StatusOK)
+	}
 	for _, pair := range []struct {
 		id string
 		s  db.AgentFailoverState
