@@ -28,9 +28,11 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 
 ## Current Phase
 
-Reconciled on 2026-10-20 against merged code and closed Issues #19, #21, #27,
-#28 and #69. The API and management clients are implemented; hierarchy-aware
-execution and end-to-end automatic failover are not complete.
+Reconciled on 2026-10-21. The API, management clients, direct-Issue hierarchy
+briefing and task-scoped delegation API/CLI are implemented. Server integration
+coverage connects delegation to native child completion and manager resumption
+(#88). Escalation, Agent lifecycle rules and end-to-end automatic failover remain
+incomplete; no real installed-agent/account/inference smoke is claimed.
 
 | Area | Implemented | Remaining boundary |
 | --- | --- | --- |
@@ -38,6 +40,7 @@ execution and end-to-end automatic failover are not complete.
 | Hierarchy API | Five Project-scoped routes around the authoritative service (#22) | No duplicate API implementation needed |
 | Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
 | Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
+| Direct-Issue delegation | Bounded Project briefing, one-hop native child creation, durable replay, task-token API/CLI and server completion/resumption regression (#73/#75/#77/#80/#82/#88) | Real CLI/daemon/provider smoke, escalation and lifecycle integration; native post-commit dispatch gap remains |
 | Failover foundations | Durable state/config, lifecycle invalidation, scoped evidence/connection/challenge/exchange boundaries, internal Codex config/thread observations and cancellable owned stdin (ADR-016–030) | Production evidence approvals, all writer/retry/claim integration, quota activation and isolated recovery inference |
 | Effective Codex credentials | Source-pinned investigation (#70) | Producer does not expose the required request-bound credential receipt through the inspected account interfaces |
 
@@ -52,8 +55,9 @@ The first runtime-context slice (#73) adds an informational one-hop Project
 hierarchy snapshot to directly assigned Issue claims. See
 [HIERARCHY_BRIEFING.md](./HIERARCHY_BRIEFING.md) for exclusions and bounds. It grants
 no delegation authority and does not cover chat/autopilot/quick-create or Squad
-tasks. The accepted direct-report delegation/wakeup/escalation and Agent lifecycle
-rules remain pending. Before each next slice, create a focused Issue, reinspect
+tasks. Direct-report delegation and native completion/resumption are described
+below; escalation and Agent lifecycle integration remain pending. Before each
+next slice, create a focused Issue, reinspect
 current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
 management remains a separate pending adapter. This roadmap does not authorize a
 different delegation architecture.

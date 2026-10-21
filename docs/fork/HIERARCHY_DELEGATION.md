@@ -1,10 +1,9 @@
 # Transactional direct-report delegation admission
 
-- Issues: #75, #77, #80 and #82; follows #73/#74
+- Issues: #75, #77, #80, #82 and #88; follows #73/#74
 - Authority: ADR-001, ADR-003, ADR-004, ADR-014, ADR-031 and ADR-032
-- Fork baseline: `e27ef881f5211bb4e05cdce126fb780d07dfa7c5`
-- Upstream baseline: `47120a4131564175da044d63d897ed9b5d76979a`
-- Upstream reviewed for CLI/briefing compatibility: `2b645691387e1535cc63d6ebf2ba4e996387c8b2`
+- Fork baseline for completion integration coverage: `dbe8cc5eac99f01b7d709a970d8cfa8d80342303`
+- Integrated/reviewed upstream: `2b645691387e1535cc63d6ebf2ba4e996387c8b2`
 
 ## Implemented boundary
 
@@ -120,6 +119,26 @@ permits `multica` commands; no new executor or credential source is introduced.
 If the command or endpoint is unavailable or permission is denied, report the
 block rather than bypassing admission through generic creation/assignment or
 mentions. Existing clients and servers do not negotiate a fallback.
+
+## Completion and manager resumption
+
+Delegated children retain native Issue/task completion and `child_done` wakeups.
+The server integration regression under #88 composes real MAT authentication,
+delegation creation/replay, native runtime claims and the task tokens they mint,
+the child's authenticated Issue status update, daemon completion/token revocation,
+the native completion receipt/timeline and the manager's claimed wakeup run.
+
+The resumed manager uses its newly issued MAT and the original request UUID to
+replay the completed delegation. It receives the same child without another
+child task or manager wakeup. Re-saving the same completed child is not another
+completion fact. The parent stays `in_progress`; the responsible Agent decides
+its next action. No hierarchy-specific executor, completion callback or queue
+is added.
+
+This is server integration coverage using HTTP handlers and PostgreSQL fixtures,
+not a real installed CLI/daemon/provider inference run. CLI transport validation
+remains separately covered by the simulated HTTP suite. The existing dispatch
+crash gap remains; escalation and Agent lifecycle integration are separate work.
 
 ## Validation
 
