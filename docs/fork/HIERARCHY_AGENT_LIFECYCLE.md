@@ -147,7 +147,8 @@ orders and their existing contention remain; this is not a global deadlock proof
 The API returns 409 `hierarchy_archive_blocked` with a `blockers` list for
 structural Agents. Busy hierarchy mutation returns 409 `hierarchy_busy`;
 delegation preserves its existing fail-closed unavailable-relation response.
-The client receives a repair message without changing successful response shapes.
+The repair message also includes Project IDs for existing clients that display
+only the error string, without changing successful response shapes.
 
 Regression coverage adds root/single-node root, manager, mixed Project roles,
 multi-Project leaves, restore/explicit re-entry, rollback after downstream

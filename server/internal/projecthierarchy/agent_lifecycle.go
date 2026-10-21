@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -55,7 +56,15 @@ type ArchiveBlocker struct {
 type ArchiveConflict struct{ Blockers []ArchiveBlocker }
 
 func (e *ArchiveConflict) Error() string {
-	return "Agent is an active hierarchy root or manager; reorganize the listed Projects before archiving"
+	projects := make([]string, 0, len(e.Blockers))
+	seen := make(map[string]bool)
+	for _, blocker := range e.Blockers {
+		if !seen[blocker.ProjectID] {
+			projects = append(projects, blocker.ProjectID)
+			seen[blocker.ProjectID] = true
+		}
+	}
+	return "Agent is an active hierarchy root or manager; reorganize these Projects before archiving: " + strings.Join(projects, ", ")
 }
 
 // GuardArchivedAgents runs AFTER the native archive UPDATE and BEFORE any

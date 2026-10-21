@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -44,6 +45,7 @@ func TestHierarchyAgentArchiveStructuralConflictRollsBack(t *testing.T) {
 			w := archiveHierarchyAgent(t, victim, http.StatusConflict)
 			var response struct {
 				Code     string `json:"code"`
+				Error    string `json:"error"`
 				Blockers []struct {
 					ProjectID    string `json:"project_id"`
 					MembershipID string `json:"membership_id"`
@@ -52,7 +54,7 @@ func TestHierarchyAgentArchiveStructuralConflictRollsBack(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if response.Code != "hierarchy_archive_blocked" || len(response.Blockers) != 1 || response.Blockers[0].ProjectID != p || response.Blockers[0].MembershipID != blocker.ID {
+			if !strings.Contains(response.Error, p) || response.Code != "hierarchy_archive_blocked" || len(response.Blockers) != 1 || response.Blockers[0].ProjectID != p || response.Blockers[0].MembershipID != blocker.ID {
 				t.Fatalf("conflict=%s", w.Body.String())
 			}
 			if n := dbfx.Count(t, `SELECT count(*) FROM agent WHERE id=$1 AND archived_at IS NULL`, victim); n != 1 {
