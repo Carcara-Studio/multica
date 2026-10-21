@@ -74,6 +74,8 @@ ADR-015 was accepted on 2026-10-16 during MFK-010 and is implementation authorit
 
 [ADR-032](ADR-032-task-token-hierarchy-delegation-api.md) composes authenticated MAT invocation and native child creation for Issue #80.
 
+[ADR-033](ADR-033-native-escalation-decision-issue.md) defines R1 durable manager decision and root human-intervention Issues under #98.
+
 ## Required Structure
 
 Use this template:

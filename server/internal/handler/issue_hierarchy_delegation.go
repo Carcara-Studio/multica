@@ -58,43 +58,55 @@ func (h *Handler) hierarchyDelegationActor(r *http.Request) (db.TaskToken, strin
 	return token, hash, nil
 }
 
+func (h *Handler) authorizeHierarchySource(ctx context.Context, qtx *db.Queries, token db.TaskToken, hash string, parentID pgtype.UUID) (db.AgentTaskQueue, error) {
+	current, err := qtx.GetTaskTokenByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.AgentTaskQueue{}, errHierarchyDelegationDenied
+		}
+		return db.AgentTaskQueue{}, err
+	}
+	if !current.ExpiresAt.Valid || !current.ExpiresAt.Time.After(time.Now()) || current.ID != token.ID || current.UserID != token.UserID || current.TaskID != token.TaskID ||
+		current.AgentID != token.AgentID || current.WorkspaceID != token.WorkspaceID {
+		return db.AgentTaskQueue{}, errHierarchyDelegationDenied
+	}
+	if _, err := qtx.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
+		UserID: token.UserID, WorkspaceID: token.WorkspaceID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.AgentTaskQueue{}, errHierarchyDelegationDenied
+		}
+		return db.AgentTaskQueue{}, err
+	}
+	task, err := qtx.GetAgentTaskInWorkspace(ctx, db.GetAgentTaskInWorkspaceParams{ID: token.TaskID, WorkspaceID: token.WorkspaceID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.AgentTaskQueue{}, errHierarchyDelegationDenied
+		}
+		return db.AgentTaskQueue{}, err
+	}
+	source, err := qtx.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: token.AgentID, WorkspaceID: token.WorkspaceID})
+	if err != nil {
+		return db.AgentTaskQueue{}, err
+	}
+	if task.Status != "running" || task.AgentID != token.AgentID || task.IssueID != parentID ||
+		task.SquadID.Valid || task.IsLeaderTask || !task.RuntimeID.Valid ||
+		task.RuntimeID != source.RuntimeID || source.ArchivedAt.Valid {
+		return db.AgentTaskQueue{}, errHierarchyDelegationDenied
+	}
+	return task, nil
+}
+
 func (h *Handler) hierarchyDelegationAuthorization(token db.TaskToken, hash string, parentID, targetID pgtype.UUID) func(context.Context, *db.Queries, projecthierarchy.DelegationRelation) error {
 	return func(ctx context.Context, qtx *db.Queries, relation projecthierarchy.DelegationRelation) error {
-		current, err := qtx.GetTaskTokenByHash(ctx, hash)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return errHierarchyDelegationDenied
-			}
-			return err
-		}
-		if !current.ExpiresAt.Valid || !current.ExpiresAt.Time.After(time.Now()) || current.ID != token.ID || current.UserID != token.UserID || current.TaskID != token.TaskID ||
-			current.AgentID != token.AgentID || current.WorkspaceID != token.WorkspaceID || relation.ParentID != parentID {
+		if relation.ParentID != parentID {
 			return errHierarchyDelegationDenied
 		}
-		if _, err := qtx.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-			UserID: token.UserID, WorkspaceID: token.WorkspaceID,
-		}); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return errHierarchyDelegationDenied
-			}
-			return err
-		}
-		task, err := qtx.GetAgentTaskInWorkspace(ctx, db.GetAgentTaskInWorkspaceParams{ID: token.TaskID, WorkspaceID: token.WorkspaceID})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return errHierarchyDelegationDenied
-			}
-			return err
-		}
-		source, err := qtx.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: token.AgentID, WorkspaceID: token.WorkspaceID})
+		task, err := h.authorizeHierarchySource(ctx, qtx, token, hash, parentID)
 		if err != nil {
 			return err
 		}
-		if task.Status != "running" || task.AgentID != token.AgentID || task.IssueID != parentID ||
-			task.SquadID.Valid || task.IsLeaderTask || !task.RuntimeID.Valid ||
-			task.RuntimeID != source.RuntimeID || source.ArchivedAt.Valid {
-			return errHierarchyDelegationDenied
-		}
+
 		target, err := qtx.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: targetID, WorkspaceID: token.WorkspaceID})
 		if err != nil {
 			return err

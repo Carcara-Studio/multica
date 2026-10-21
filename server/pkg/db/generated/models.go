@@ -1425,6 +1425,24 @@ type ProjectHierarchyDelegation struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
+type ProjectHierarchyEscalation struct {
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	SourceIssueID       pgtype.UUID        `json:"source_issue_id"`
+	SourceAgentID       pgtype.UUID        `json:"source_agent_id"`
+	RequestID           pgtype.UUID        `json:"request_id"`
+	ProjectID           pgtype.UUID        `json:"project_id"`
+	SourceMembershipID  pgtype.UUID        `json:"source_membership_id"`
+	ManagerMembershipID pgtype.UUID        `json:"manager_membership_id"`
+	ManagerAgentID      pgtype.UUID        `json:"manager_agent_id"`
+	HumanIntervention   bool               `json:"human_intervention"`
+	DecisionIssueID     pgtype.UUID        `json:"decision_issue_id"`
+	SourceTaskID        pgtype.UUID        `json:"source_task_id"`
+	Reason              string             `json:"reason"`
+	Context             string             `json:"context"`
+	RequestHash         []byte             `json:"request_hash"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type ProjectResource struct {
 	ID           pgtype.UUID        `json:"id"`
 	ProjectID    pgtype.UUID        `json:"project_id"`

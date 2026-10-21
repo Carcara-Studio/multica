@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS project_hierarchy_escalation_identity_idx ON project_hierarchy_escalation (workspace_id,source_issue_id,source_agent_id,request_id);
