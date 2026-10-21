@@ -27,6 +27,8 @@ func TestHierarchyEscalationNativeAuthorization(t *testing.T) {
 				f.token = f.newToken(t, f.task)
 			}
 			dbfx.Cleanup(t, "DELETE FROM project_hierarchy_escalation WHERE source_issue_id=$1", f.parent)
+			dbfx.Cleanup(t, "DELETE FROM inbox_item WHERE issue_id IN (SELECT decision_issue_id FROM project_hierarchy_escalation WHERE source_issue_id=$1)", f.parent)
+			dbfx.Cleanup(t, "DELETE FROM agent_task_queue WHERE issue_id IN (SELECT decision_issue_id FROM project_hierarchy_escalation WHERE source_issue_id=$1)", f.parent)
 			hash := auth.HashToken(f.token)
 			token, err := testHandler.Queries.GetTaskTokenByHash(context.Background(), hash)
 			if err != nil {
@@ -71,6 +73,7 @@ func TestHierarchyEscalationNativeAuthorization(t *testing.T) {
 			dbfx.Exec(t, "UPDATE task_token SET expires_at=$1 WHERE token_hash=$2", time.Now().Add(time.Hour), freshHash)
 			if !root {
 				other := dbfx.User(t, "other escalation originator", uuid.NewString()+"@multica.test")
+				dbfx.Member(t, testWorkspaceID, other, "member")
 				dbfx.Exec(t, "UPDATE agent_task_queue SET originator_user_id=$1,accountable_user_id=$1 WHERE id=$2", other, next)
 				if _, err = testHandler.IssueService.Escalate(context.Background(), in, service.IssueCreateOpts{}); err == nil {
 					t.Fatal("token-user ownership bypassed actual originator permission")

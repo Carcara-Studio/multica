@@ -22,6 +22,8 @@ func escalationFixture(t *testing.T, manager bool) (*hierarchyCreateFixture, Hie
 		f.fx.Exec(t, "UPDATE agent_task_queue SET agent_id=$1 WHERE id=$2", source, f.p.OriginID)
 	}
 	f.fx.Cleanup(t, "DELETE FROM project_hierarchy_escalation WHERE workspace_id=$1", f.p.WorkspaceID)
+	f.fx.Cleanup(t, "DELETE FROM inbox_item WHERE issue_id IN (SELECT decision_issue_id FROM project_hierarchy_escalation WHERE source_issue_id=$1)", f.p.ParentIssueID)
+	f.fx.Cleanup(t, "DELETE FROM agent_task_queue WHERE issue_id IN (SELECT decision_issue_id FROM project_hierarchy_escalation WHERE source_issue_id=$1)", f.p.ParentIssueID)
 	in := HierarchyEscalationCreate{WorkspaceID: f.p.WorkspaceID, ProjectID: f.p.ProjectID, IssueID: f.p.ParentIssueID, SourceAgentID: source, SourceTaskID: f.p.OriginID, RequestID: util.MustParseUUID(uuid.NewString()), Reason: "Need a decision", Context: "Two incompatible requirements"}
 	in.Authorize = func(context.Context, *db.Queries, projecthierarchy.EscalationRelation) error { return nil }
 	return f, in
@@ -191,5 +193,32 @@ func TestHierarchyEscalationWorkspaceTeardown(t *testing.T) {
 	var n int
 	if err = tx.QueryRow(context.Background(), "SELECT count(*) FROM project_hierarchy_escalation WHERE workspace_id=$1", in.WorkspaceID).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("teardown receipt=%d / %v", n, err)
+	}
+}
+
+func TestHierarchyEscalationRootRecipientPolicy(t *testing.T) {
+	f, in := escalationFixture(t, false)
+	admin := f.fx.User(t, "admin", uuid.NewString()+"@multica.test")
+	lead := f.fx.User(t, "lead", uuid.NewString()+"@multica.test")
+	other := f.fx.User(t, "ordinary member", uuid.NewString()+"@multica.test")
+	f.fx.Member(t, f.fx.WorkspaceID, admin, "admin")
+	f.fx.Member(t, f.fx.WorkspaceID, lead, "member")
+	f.fx.Member(t, f.fx.WorkspaceID, other, "member")
+	for _, tc := range []struct {
+		lead string
+		want int
+	}{{lead, 3}, {f.fx.UserID, 2}, {uuid.NewString(), 2}} {
+		in.RequestID = util.MustParseUUID(uuid.NewString())
+		f.fx.Exec(t, "UPDATE project SET lead_type='member',lead_id=$1 WHERE id=$2", tc.lead, in.ProjectID)
+		result, err := f.svc.Escalate(context.Background(), in, IssueCreateOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := f.fx.Count(t, "SELECT count(*) FROM inbox_item WHERE issue_id=$1", result.Issue.ID); n != tc.want {
+			t.Fatalf("lead %s: inbox=%d want=%d", tc.lead, n, tc.want)
+		}
+		if n := f.fx.Count(t, "SELECT count(*) FROM inbox_item WHERE issue_id=$1 AND recipient_id=$2", result.Issue.ID, other); n != 0 {
+			t.Fatal("ordinary member received privileged intervention")
+		}
 	}
 }
