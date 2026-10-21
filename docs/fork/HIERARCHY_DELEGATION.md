@@ -1,9 +1,10 @@
 # Transactional direct-report delegation admission
 
-- Issues: #75, #77 and #80; follows #73/#74
-- Authority: ADR-001, ADR-003, ADR-004 and ADR-014
-- Fork baseline: `7ea1fd99b84d4385f2896b863a53da765bd84e02`
+- Issues: #75, #77, #80 and #82; follows #73/#74
+- Authority: ADR-001, ADR-003, ADR-004, ADR-014, ADR-031 and ADR-032
+- Fork baseline: `e27ef881f5211bb4e05cdce126fb780d07dfa7c5`
 - Upstream baseline: `47120a4131564175da044d63d897ed9b5d76979a`
+- Upstream reviewed for CLI/briefing compatibility: `2b645691387e1535cc63d6ebf2ba4e996387c8b2`
 
 ## Implemented boundary
 
@@ -88,12 +89,37 @@ excluded. Creation and replay use the same admission checks.
 Response is {issue_id, replayed}: 201 new, 200 replay, 409 changed intent and
 410 deleted child. A receipt does not mean a daemon has started or that a queue
 ID can be recovered from a prior attempt. Fetch native Issue/task resources.
-CLI command/tool advertisement remains pending.
+The task-scoped CLI exposes this adapter as `multica issue delegate`.
 
 ADR-032 explicitly defines fresh-read authorization, not a task-completion or
 revocation lease spanning commit. No task lock is acquired after Issue/Agent
 locks, avoiding inversion with native completion. The native post-commit
 scheduling gap remains. Parent completion, mentions and Squads are unchanged.
+
+## Task-scoped CLI
+
+```sh
+multica issue delegate <parent-id-or-key> \
+  --agent <direct-report-agent-uuid> \
+  --request-id <persisted-uuid> --title 'Review the implementation'
+```
+
+The caller persists the explicit nonzero request UUID before invoking the
+command. Reuse that UUID and unchanged intent after an uncertain result or in
+a later task turn; create another UUID only for deliberately new work. The
+command makes one POST, requires a native task token, resolves the parent using
+the existing Issue resolver and requires an explicit Agent UUID. It preserves
+typed HTTP errors and validates both receipt fields before printing JSON.
+`--description`, `--description-file` and `--description-stdin` reuse native
+exclusive text sources and file containment checks. Priority defaults to `none`.
+
+The existing bounded direct-Issue hierarchy briefing advertises the command and
+stable-ID rule. It grants no authority, adds no automatic fanout and keeps the
+existing no-Project/Squad exclusions. The existing agent shell tooling already
+permits `multica` commands; no new executor or credential source is introduced.
+If the command or endpoint is unavailable or permission is denied, report the
+block rather than bypassing admission through generic creation/assignment or
+mentions. Existing clients and servers do not negotiate a fallback.
 
 ## Validation
 
@@ -111,7 +137,9 @@ intent, completed/edited/deleted children, fresh authorization on replay,
 counter/event suppression, reassigned parent, missing callback, commit rollback
 and workspace identity cleanup.
 
-No local execution environment is available. Compile/vet/full PostgreSQL/race
-CI is required for the exact merge head. No local test/formatting result or
-installed-agent/account/inference use is claimed. The task-token API is available; CLI/tool discovery remains pending. Automatic
-fallback and primary recovery probes remain disabled.
+CLI tests use an in-process HTTP server and cover stable intent, creation/replay
+receipts, typed failures without retry/fallback, invalid inputs and receipts,
+native description sources and canonical parent lookup. Compile/vet/full
+PostgreSQL/race CI is required for the exact merge head. No installed-agent,
+account or inference use is claimed. Automatic fallback and primary recovery
+probes remain disabled.

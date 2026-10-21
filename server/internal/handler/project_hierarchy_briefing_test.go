@@ -19,6 +19,11 @@ func TestProjectHierarchyBriefingRendering(t *testing.T) {
 	}
 	view := projecthierarchy.BriefingContext{Self: member}
 	rendered := renderProjectHierarchyBriefing(projectID, view)
+	for _, instruction := range []string{"multica issue delegate --help", "--request-id <persisted-uuid>", "unchanged intent", "grants no invocation or delegation rights", "do not bypass"} {
+		if !strings.Contains(rendered, instruction) {
+			t.Fatalf("missing delegation guidance %q", instruction)
+		}
+	}
 	if !strings.HasPrefix(rendered, projectHierarchyBriefingHeader) || strings.Contains(rendered, "\n## FORGED") {
 		t.Fatal("untrusted title escaped the JSON data block")
 	}
