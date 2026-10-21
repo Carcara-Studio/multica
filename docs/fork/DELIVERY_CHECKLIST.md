@@ -9,14 +9,14 @@ independently authorize additional delivery work.
 
 ## Fixed scope and completion criteria
 
-R1 is delivered by #98 / PR #99; R2-R5 remain open. A helper, audit, mock test
+R1 is delivered by #98 / PR #99 and R2 by #100 / PR #101; R3-R5 remain open. A helper, audit, mock test
 or foundation PR alone is not completion of an item. Maintain evidence here as
 work lands; do not replace these identifiers with new phases.
 
 | ID | Agreed delivery | Current status | Completion criteria |
 | --- | --- | --- | --- |
 | R1 | Complete escalation operation | Complete: #98 / PR #99, ADR-033; native PG17 manager/root, replay/collision and current-credential authorization coverage. Native dispatch crash recovery remains R3 | Persist reason/context and source/target lineage with stable request identity; retries cannot duplicate the request or change its intent silently. Route one direct-manager edge using native permission/readiness and execution fences. Unavailable manager is not skipped. Root reaches a durable, visible human-intervention condition without an Agent/Project-lead loop. Preserve original work/partial execution; no automatic reassignment or replay. Integration tests prove delivery, replay/collision and root behavior. |
-| R2 | Expose escalation | In progress #100: API/CLI/briefing/shared Issue panel; native and client verification pending | Provide the API, CLI, bounded Agent instructions and management UI for the R1 operation. Validate the current task credential, actor/Issue binding and permissions; reject unauthorized/unavailable targets. Show source, destination/root boundary, reason/state and repair needs. Preserve successful existing contracts and test the changed client surfaces. The relation helper alone must not be advertised as executable escalation. |
+| R2 | Expose escalation | Complete: #100 / PR #101, ADR-034; MAT-only API/CLI, bounded briefing and shared web/desktop decision management. Native PG17 and changed client regression gates required before merge | Provide the API, CLI, bounded Agent instructions and management UI for the R1 operation. Validate the current task credential, actor/Issue binding and permissions; reject unauthorized/unavailable targets. Show source, destination/root boundary, reason/state and repair needs. Preserve successful existing contracts and test the changed client surfaces. The relation helper alone must not be advertised as executable escalation. |
 | R3 | Recover committed operations whose execution was not dispatched | Pending; existing native post-commit enqueue gap is documented | A server failure between durable registration and native enqueue can be detected and recovered without duplicate work or blind replay of ambiguous partial execution. Define and prove the recovery/reconciliation rule against native execution fences, including restart/concurrency tests. Cover the delivered delegation boundary and applicable escalation delivery; do not create a second general executor. |
 | R4 | Complete automatic model fallback and recovery | Blocked at activation: producer credential/evidence boundary remains unresolved; control-plane foundations exist | Obtain trustworthy request-bound evidence for the effective execution credential/target, integrate all required dispatch/claim/retry writers, switch only on accepted quota evidence, route subsequent work to fallback, and test the primary every 30 minutes with isolated inference. Recover safely when the primary is available. Prove concurrency/crash/partial-execution behavior and the accepted provider compatibility policy. Automatic fallback/probes stay disabled until the evidence and execution gates actually pass; control-plane tests cannot close this item. |
 | R5 | Real-environment validation and upstream compatibility | Pending final smoke; upstream revalidation remains continuous | Run the bounded installed CLI/daemon/application smoke with the maintainer's real Windows/account environment when authorized, record exact evidence and limitations, and resolve regressions in R1-R4. Incorporate the reviewed upstream UI advance through the normal isolated synchronization workflow (integrated baseline 2b645691387e1535cc63d6ebf2ba4e996387c8b2; reviewed advance e0e9efc5f1d6ff2a88ad2d7844d4d76f2519985d). Revalidate upstream for affected changes and verify the final integrated behavior. No real-account smoke is claimed from fake HTTP/agent or server tests. |
@@ -102,3 +102,26 @@ concurrent-index retry registration. The PR adds that native registration and
 an isolated up/down/up migration test; the final full CI is the merge gate.
 No real installed CLI, daemon or provider inference was used. Public operation
 exposure remains R2, and native post-commit enqueue reconciliation remains R3.
+
+
+## R2 delivery evidence (#100 / PR #101)
+
+ADR-034 and HIERARCHY_ESCALATION.md describe the bounded task-token creation
+contract, workspace-authorized paged history and native decision management.
+Local Go CLI tests/vet, 52 affected core tests, 101 history/Issue-detail view
+tests, core/views typechecks and affected ESLint passed. Native PG17/race CI
+39650872334 exercised the new HTTP operation, authorization, replay, manager/
+root delivery, diagnostics and pagination. Its only backend failure was a test
+expecting 403 where the native middleware correctly conceals an outsider's
+workspace as 404; the assertion is corrected without changing admission policy.
+The final PR head must pass full native/backend, client, build, Windows and
+mobile compatibility gates before integration. Final CI results remain attached
+to PR #101. The response parser additionally rejects zero identities and
+inconsistent manager/root routes; valid JSON-escaped maximum text is covered.
+
+No real installed CLI/account/provider inference was performed. Local browser
+screenshot installation failed because its downloaded archive was truncated;
+component semantics/navigation and production client builds are the available
+UI evidence. R3 still owns safe dispatch reconciliation; R4's activation blocker
+and R5 real-environment/upstream synchronization remain open. No new top-level
+work item is introduced.

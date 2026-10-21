@@ -165,7 +165,14 @@ func TestHierarchyEscalationHTTPPaginationAndReadBoundary(t *testing.T) {
 	other := dbfx.User(t, "outside workspace", uuid.NewString()+"@multica.test")
 	pat := "mul_" + uuid.NewString()
 	dbfx.Insert(t, "personal_access_token", testutil.Cols{"user_id": other, "name": "outsider", "token_hash": auth.HashToken(pat), "token_prefix": "mul_test"})
-	if w = escalationHTTP(t, pat, http.MethodGet, path, nil); w.Code != 403 {
+	if w = escalationHTTP(t, pat, http.MethodGet, path, nil); w.Code != 404 {
 		t.Fatalf("outside read: %d %s", w.Code, w.Body.String())
 	}
+}
+
+func TestHierarchyEscalationHTTPAcceptsBoundedTextWithJSONEscaping(t *testing.T) {
+	f := escalationHTTPFixture(t)
+	// JSON HTML escaping expands 24,000 valid text bytes to 144,000 bytes.
+	body := map[string]any{"request_id": uuid.NewString(), "reason": strings.Repeat("<", 8000), "context": strings.Repeat(">", 16000)}
+	hierarchyReceipt(t, escalationHTTP(t, f.token, http.MethodPost, "/api/issues/"+f.parent+"/hierarchy-escalations", body), 201)
 }
