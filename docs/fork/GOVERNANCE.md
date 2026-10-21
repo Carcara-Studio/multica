@@ -28,6 +28,17 @@ Agent-generated implementation notes are not architectural authority by themselv
 
 If implementation evidence contradicts an accepted ADR, the affected structural implementation must stop until the contradiction is resolved through repository evidence and, when the structural decision changes, an ADR update or superseding ADR.
 
+## Remaining Delivery Scope
+
+`docs/fork/DELIVERY_CHECKLIST.md` is the single current execution-scope checklist
+for the five agreed remaining deliverables (R1-R5). Every new Issue/PR must map
+to an existing item and its acceptance criterion. Necessary implementation,
+verification and compatibility substeps remain autonomously authorized; no new
+per-PR approval gate is introduced. New top-level deliverables or functional
+expansion require explicit maintainer agreement and a recorded scope change
+before implementation. Historical blueprint candidate lists do not independently
+authorize more work. Code/tests and accepted ADRs retain architectural authority.
+
 ## Protected Branch
 
 `main` is the protected integration branch.
