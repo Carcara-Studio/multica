@@ -4,6 +4,12 @@ This directory contains documentation specific to the `Carcara-Studio/multica` f
 
 The official upstream repository is `multica-ai/multica`. Upstream-owned root documentation remains authoritative for standard Multica behavior unless an accepted fork ADR explicitly defines an additive deviation.
 
+## Remaining delivery scope
+
+[`DELIVERY_CHECKLIST.md`](./DELIVERY_CHECKLIST.md) is the single current checklist
+for the five agreed remaining items (R1-R5), their acceptance criteria, blockers
+and scope-change rules. Older candidate lists do not authorize extra work.
+
 ## Documents
 
 - [`PROJECT_BLUEPRINT.md`](./PROJECT_BLUEPRINT.md) — project mission, confirmed upstream architecture, fork architecture, roadmap, risks, and current decisions.
@@ -62,16 +68,16 @@ no delegation authority and does not cover chat/autopilot/quick-create or Squad
 tasks. Direct-report delegation and native completion/resumption are described
 below; escalation remains pending. Before each
 next slice, create a focused Issue, reinspect
-current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
-management remains a separate pending adapter. This roadmap does not authorize a
-different delegation architecture.
+current hooks and preserve no-Project/direct-Agent/Squad regressions. A hierarchy-management CLI is outside the current remaining scope unless the
+maintainer explicitly adds it through DELIVERY_CHECKLIST.md. This roadmap does
+not authorize a different delegation architecture.
 
 The delegation core (#75/#77) provides transactional one-hop validation and
 durable native child creation. The task-token-only API (#80) composes current
 MAT/task bindings, originator-based invocation and native runtime readiness.
 The task-scoped CLI and bounded direct-Issue briefing (#82) expose
 `multica issue delegate` with an explicit persisted request UUID, no automatic
-retry and no generic-create fallback. Hierarchy management CLI remains separate.
+retry and no generic-create fallback. Hierarchy management CLI is outside the current agreed remaining scope.
 See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). The relation gate freezes
 the relevant structural rows; the authenticated adapter supplies the independent
 invocation/runtime gate. Native child creation and replay reuse existing

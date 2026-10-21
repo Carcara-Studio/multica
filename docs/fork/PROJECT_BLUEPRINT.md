@@ -1,5 +1,12 @@
 # Multica Fork — Project Blueprint
 
+> Current execution scope: [DELIVERY_CHECKLIST.md](./DELIVERY_CHECKLIST.md).
+> It fixes the five agreed remaining items (R1-R5), acceptance criteria and
+> scope-change controls. Candidate milestone lists and older status/baseline
+> snapshots below are historical/design context, not an independent backlog
+> authorization. Use the checklist and current README/evidence before new work.
+
+
 > **Status:** Hierarchy API/management clients implemented; runtime semantics pending; automatic failover disabled
 > **Fork:** `Carcara-Studio/multica`
 > **Upstream:** `multica-ai/multica`
