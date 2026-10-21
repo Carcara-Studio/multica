@@ -12,6 +12,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
 - [`FAIL-001_INVESTIGATION.md`](./FAIL-001_INVESTIGATION.md) — current failover call-site inventory, evidence corrections and unclosed integration gates.
 - [`CODEX_CREDENTIAL_BOUNDARY.md`](./CODEX_CREDENTIAL_BOUNDARY.md) — pinned Codex source audit, credential-observation dependency and dispatch-bound acceptance requirements.
+- [`HIERARCHY_AGENT_LIFECYCLE.md`](./HIERARCHY_AGENT_LIFECYCLE.md) — archive-writer/lock audit and implementation gates; lifecycle enforcement remains pending (#90).
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
 ## Authority
@@ -36,7 +37,7 @@ incomplete; no real installed-agent/account/inference smoke is claimed.
 
 | Area | Implemented | Remaining boundary |
 | --- | --- | --- |
-| Hierarchy persistence/domain | Schema, Project/Workspace cleanup, serialized full-tree validation and structural mutations (#16/#18) | Agent lifecycle rules under ADR-006 |
+| Hierarchy persistence/domain | Schema, Project/Workspace cleanup, serialized full-tree validation and structural mutations (#16/#18) | Agent lifecycle enforcement under ADR-006; writer/lock audit completed (#90) |
 | Hierarchy API | Five Project-scoped routes around the authoritative service (#22) | No duplicate API implementation needed |
 | Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
 | Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
