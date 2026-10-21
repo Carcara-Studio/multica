@@ -48,7 +48,12 @@ in the selected two-shard native CI lane. Local DB-backed tests skip without Pos
 integration proof. PR CI must pass native PostgreSQL 17/race service/handler/
 hierarchy/migrations, generated SQLC, agents, Windows, selected full client
 quality/build/tests and mobile compatibility before merge. Exact run results
-and any corrections are recorded on the synchronization PR. No installed CLI,
+and any corrections are recorded on the synchronization PR. Initial final-head
+CI passed backend/build/mobile but exposed one existing floating-chat test race:
+DOM removal can be observed before query-observer cleanup settles. Keep both
+assertions in the same bounded waitFor; do not change production chat behavior,
+add sleeps or relax the zero-observer requirement. Local full views had passed
+all 6,245 tests; final CI must validate the corrected asynchronous assertion. No installed CLI,
 provider inference or real-account smoke is implied by those checks. Browser
 screenshots are not claimed from component tests or build output.
 
