@@ -139,7 +139,9 @@ is added.
 This is server integration coverage using HTTP handlers and PostgreSQL fixtures,
 not a real installed CLI/daemon/provider inference run. CLI transport validation
 remains separately covered by the simulated HTTP suite. The existing dispatch
-crash gap remains; escalation and Agent lifecycle integration are separate work.
+crash gap remains. Agent archive consistency is implemented in #92; escalation
+relation validation (#94) and its remaining delivery boundaries are documented
+in [HIERARCHY_ESCALATION.md](./HIERARCHY_ESCALATION.md).
 
 ## Validation
 

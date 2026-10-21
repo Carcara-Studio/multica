@@ -12,6 +12,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
 - [`FAIL-001_INVESTIGATION.md`](./FAIL-001_INVESTIGATION.md) — current failover call-site inventory, evidence corrections and unclosed integration gates.
 - [`CODEX_CREDENTIAL_BOUNDARY.md`](./CODEX_CREDENTIAL_BOUNDARY.md) — pinned Codex source audit, credential-observation dependency and dispatch-bound acceptance requirements.
+- [`HIERARCHY_ESCALATION.md`](./HIERARCHY_ESCALATION.md) — one-hop/root-boundary validation and remaining escalation delivery work (#94).
 - [`HIERARCHY_AGENT_LIFECYCLE.md`](./HIERARCHY_AGENT_LIFECYCLE.md) — archive-writer/lock audit and atomic lifecycle enforcement (#90/#92).
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
@@ -32,7 +33,8 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 Reconciled on 2026-10-21. The API, management clients, direct-Issue hierarchy
 briefing and task-scoped delegation API/CLI are implemented. Server integration
 coverage connects delegation to native child completion and manager resumption
-(#88). Escalation and end-to-end automatic failover remain
+(#88). Escalation has an internal one-hop/root-boundary relation gate (#94);
+durable routing/API/CLI/UI delivery and end-to-end automatic failover remain
 incomplete; no real installed-agent/account/inference smoke is claimed.
 
 | Area | Implemented | Remaining boundary |
@@ -42,6 +44,7 @@ incomplete; no real installed-agent/account/inference smoke is claimed.
 | Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
 | Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
 | Direct-Issue delegation | Bounded Project briefing, one-hop native child creation, durable replay, task-token API/CLI and server completion/resumption regression (#73/#75/#77/#80/#82/#88) | Real CLI/daemon/provider smoke and escalation; native post-commit dispatch gap remains |
+| Upward escalation | Internal direct-manager/root-boundary relation validation (#94) | Durable idempotent operation, current-task/runtime authorization, manager routing, human intervention surface and API/CLI/UI |
 | Failover foundations | Durable state/config, lifecycle invalidation, scoped evidence/connection/challenge/exchange boundaries, internal Codex config/thread observations and cancellable owned stdin (ADR-016–030) | Production evidence approvals, all writer/retry/claim integration, quota activation and isolated recovery inference |
 | Effective Codex credentials | Source-pinned investigation (#70) | Producer does not expose the required request-bound credential receipt through the inspected account interfaces |
 
