@@ -1,6 +1,6 @@
 # Upstream synchronization — 2026-10-21
 
-- R5 subtask: #104; policy: UPSTREAM_SYNC.md, ADR-014/015.
+- R5 subtask: #104 / PR #105; policy: UPSTREAM_SYNC.md, ADR-014/015.
 - Fork base: 33eef12241b6ad224bd9283359a62abab7470b9b.
 - Prior upstream integration: 2b645691387e1535cc63d6ebf2ba4e996387c8b2.
 - Upstream target: c9b6de8567d7bb57bf9a2a3220207cf2b3e5a038.
@@ -42,8 +42,9 @@ compatibility work within R5, not a new delivery item or executor choice.
 
 ## Verification
 
-Local targeted Go tests/vet and selected core/UI/view regressions are run against
-the merged tree. Local DB-backed tests skip without PostgreSQL; they are not
+Local targeted Go tests/vet, simulated Qoder bridge/helper tests, all 2,332 core
+tests and 17 UI tests passed against the merged tree. View regressions also run
+in the selected two-shard native CI lane. Local DB-backed tests skip without PostgreSQL; they are not
 integration proof. PR CI must pass native PostgreSQL 17/race service/handler/
 hierarchy/migrations, generated SQLC, agents, Windows, selected full client
 quality/build/tests and mobile compatibility before merge. Exact run results
