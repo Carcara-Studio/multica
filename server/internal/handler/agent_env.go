@@ -194,6 +194,9 @@ func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 	}
 	existing := unmarshalCustomEnv(locked)
 	merged, audit := agentsecrets.MergeEnvironment(existing, req.CustomEnv)
+	if len(merged) > 0 && h.rejectQoderOverrides(w, r, locked, qoderOverrides{customEnv: len(merged)}) {
+		return
+	}
 
 	envBytes, err := json.Marshal(merged)
 	if err != nil {
