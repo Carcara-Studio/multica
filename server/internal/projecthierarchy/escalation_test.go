@@ -16,7 +16,7 @@ import (
 
 func TestEscalationDerivesOnlyTheDirectManager(t *testing.T) {
 	pool := openHierarchyTestPool(t)
-	for _, name := range []string{"direct", "no Project", "moved Project", "different assignee", "Squad assignee", "nonmember", "foreign workspace", "archived source", "archived source membership", "archived manager", "archived manager membership", "missing manager", "missing manager Agent", "missing source Agent", "system manager", "foreign manager", "self cycle", "broken ancestor", "invalid identity"} {
+	for _, name := range []string{"direct", "no Project", "moved Project", "different assignee", "Squad assignee", "nonmember", "foreign workspace", "archived source", "archived source membership", "archived manager", "archived manager membership", "missing manager", "missing manager Agent", "missing source Agent", "system manager", "foreign manager", "cycle", "broken ancestor", "invalid identity"} {
 		t.Run(name, func(t *testing.T) {
 			f := newHierarchyServiceFixture(t, pool)
 			rootAgent, managerAgent, workerAgent := f.agent(t, "root"), f.agent(t, "manager"), f.agent(t, "worker")
@@ -60,8 +60,8 @@ func TestEscalationDerivesOnlyTheDirectManager(t *testing.T) {
 				other := newHierarchyServiceFixture(t, pool)
 				foreign := other.agent(t, "Foreign")
 				f.fx.Exec(t, `UPDATE project_agent_membership SET agent_id=$2 WHERE id=$1`, manager.ID, foreign)
-			case "self cycle":
-				f.fx.Exec(t, `UPDATE project_agent_membership SET manager_membership_id=id WHERE id=$1`, worker.ID)
+			case "cycle":
+				f.fx.Exec(t, `UPDATE project_agent_membership SET manager_membership_id=$2 WHERE id=$1`, manager.ID, worker.ID)
 			case "broken ancestor":
 				f.fx.Exec(t, `UPDATE project_agent_membership SET manager_membership_id=$2 WHERE id=$1`, manager.ID, testUUID(t))
 			case "invalid identity":
