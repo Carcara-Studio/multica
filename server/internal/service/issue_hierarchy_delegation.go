@@ -22,9 +22,9 @@ var (
 )
 
 // HierarchyDelegationCreate is an internal admission contract, never a request
-// DTO. A future authenticated transport must supply fresh actor/task,
+// DTO. An authenticated transport must supply fresh actor/task,
 // invocation and runtime authorization through Authorize, including on replay.
-// There is intentionally no production caller in this increment.
+// The task-token HTTP adapter supplies the native invocation/runtime gate.
 type HierarchyDelegationCreate struct {
 	RequestID pgtype.UUID
 	Authorize func(context.Context, *db.Queries, projecthierarchy.DelegationRelation) error

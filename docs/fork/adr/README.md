@@ -72,6 +72,8 @@ ADR-015 was accepted on 2026-10-16 during MFK-010 and is implementation authorit
 
 [ADR-031](ADR-031-native-delegation-operation-identity.md) resolves ADR-004's deferred native delegation storage choice under Issue #77.
 
+[ADR-032](ADR-032-task-token-hierarchy-delegation-api.md) composes authenticated MAT invocation and native child creation for Issue #80.
+
 ## Required Structure
 
 Use this template:
