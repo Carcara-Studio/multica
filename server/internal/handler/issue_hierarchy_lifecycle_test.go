@@ -33,7 +33,11 @@ func TestHierarchyDelegationChildCompletionResumesManagerAndReplays(t *testing.T
 		req := newDaemonTokenRequest(http.MethodPost, "/api/daemon/tasks/"+taskID+"/complete",
 			map[string]any{"output": output}, testWorkspaceID, "hierarchy-lifecycle-fixture")
 		req = withURLParam(req, "taskId", taskID)
-		testutil.Call(t, testHandler.CompleteTask, req).Want(http.StatusOK)
+		var terminal AgentTaskResponse
+		testutil.Call(t, testHandler.CompleteTask, req).Want(http.StatusOK).JSON(&terminal)
+		if terminal.ID != taskID || terminal.Status != "completed" {
+			t.Fatalf("task did not complete: id=%s status=%s", terminal.ID, terminal.Status)
+		}
 		if n := dbfx.Count(t, "SELECT count(*) FROM task_token WHERE task_id = $1", taskID); n != 0 {
 			t.Fatalf("completed task retained %d task tokens", n)
 		}
@@ -55,6 +59,20 @@ func TestHierarchyDelegationChildCompletionResumesManagerAndReplays(t *testing.T
 		}
 		if !strings.HasPrefix(task.AuthToken, "mat_") {
 			t.Fatal("native claim omitted its task token")
+		}
+		if !task.StartClaimSupported || task.DispatchedAt == nil || task.Status != "dispatched" {
+			t.Fatal("native claim omitted its start generation")
+		}
+		// A claim reserves the run; the daemon must acknowledge this exact
+		// generation before its task is running or its MAT can delegate.
+		req := newDaemonTokenRequest(http.MethodPost, "/api/daemon/tasks/"+task.ID+"/start",
+			map[string]string{"runtime_id": task.RuntimeID, "dispatched_at": *task.DispatchedAt},
+			testWorkspaceID, "hierarchy-lifecycle-fixture")
+		req = withURLParam(req, "taskId", task.ID)
+		var started AgentTaskResponse
+		testutil.Call(t, testHandler.StartTask, req).Want(http.StatusOK).JSON(&started)
+		if started.ID != task.ID || started.Status != "running" {
+			t.Fatalf("claimed task did not start: id=%s status=%s", started.ID, started.Status)
 		}
 		return task
 	}

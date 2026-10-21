@@ -124,7 +124,8 @@ mentions. Existing clients and servers do not negotiate a fallback.
 
 Delegated children retain native Issue/task completion and `child_done` wakeups.
 The server integration regression under #88 composes real MAT authentication,
-delegation creation/replay, native runtime claims and the task tokens they mint,
+delegation creation/replay, native runtime claims, generation-bound start
+acknowledgements and the task tokens those claims mint,
 the child's authenticated Issue status update, daemon completion/token revocation,
 the native completion receipt/timeline and the manager's claimed wakeup run.
 
