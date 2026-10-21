@@ -206,7 +206,7 @@ func (h *Handler) CreateHierarchyDelegation(w http.ResponseWriter, r *http.Reque
 func (h *Handler) writeHierarchyDelegationError(w http.ResponseWriter, err error) {
 	status, code := http.StatusInternalServerError, "delegation_failed"
 	switch {
-	case errors.Is(err, errHierarchyDelegationDenied), errors.Is(err, service.ErrDelegationInvalid),
+	case errors.Is(err, service.ErrHierarchyDispatchUnavailable), errors.Is(err, errHierarchyDelegationDenied), errors.Is(err, service.ErrDelegationInvalid),
 		projecthierarchy.IsCode(err, projecthierarchy.CodeDelegationNotAllowed):
 		status, code = http.StatusForbidden, "delegation_not_allowed"
 	case projecthierarchy.IsCode(err, projecthierarchy.CodeInvalidInput):

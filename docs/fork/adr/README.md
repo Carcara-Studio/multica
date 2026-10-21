@@ -211,3 +211,5 @@ ADR-015 — Reserved migration namespace for fork-owned schema changes
 ```
 
 The numbering above records the accepted architecture set. Future ADR numbers must remain append-only; do not renumber accepted decisions.
+
+[ADR-035](ADR-035-native-hierarchy-dispatch-recovery.md) defines R3 atomic native initial-task registration, restart recovery and refusal to reconstruct ambiguous historical execution (#102).

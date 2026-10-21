@@ -83,7 +83,7 @@ func (h *Handler) writeHierarchyEscalationError(w http.ResponseWriter, err error
 	switch {
 	case projecthierarchy.IsCode(err, projecthierarchy.CodeInvalidInput):
 		status, code = 400, "invalid_escalation"
-	case errors.Is(err, service.ErrEscalationInvalid), errors.Is(err, errHierarchyDelegationDenied), projecthierarchy.IsCode(err, projecthierarchy.CodeEscalationNotAllowed):
+	case errors.Is(err, service.ErrHierarchyDispatchUnavailable), errors.Is(err, service.ErrEscalationInvalid), errors.Is(err, errHierarchyDelegationDenied), projecthierarchy.IsCode(err, projecthierarchy.CodeEscalationNotAllowed):
 		status, code = 403, "escalation_not_allowed"
 	case projecthierarchy.IsCode(err, projecthierarchy.CodeHierarchyBusy):
 		status, code = 409, "escalation_busy"

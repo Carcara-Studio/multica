@@ -42,7 +42,7 @@ type escalationCreateState struct {
 }
 
 // Escalate creates a native manager decision or root human-intervention Issue.
-// Successful replay does not retry enqueue; native crash reconciliation is R3.
+// Successful replay never re-enqueues; native initial-task recovery is ADR-035.
 func (s *IssueService) Escalate(ctx context.Context, in HierarchyEscalationCreate, opts IssueCreateOpts) (IssueCreateResult, error) {
 	in.Reason = strings.TrimSpace(in.Reason)
 	in.Context = strings.TrimSpace(in.Context)
@@ -99,9 +99,9 @@ func prepareHierarchyEscalation(ctx context.Context, tx pgx.Tx, p *IssueCreatePa
 		return nil, nil, err
 	}
 	hash := sha256.Sum256(intent)
-	var oldDecision pgtype.UUID
+	var oldDecision, initialTaskID pgtype.UUID
 	var oldHash []byte
-	err = tx.QueryRow(ctx, `SELECT decision_issue_id,request_hash FROM project_hierarchy_escalation WHERE workspace_id=$1 AND source_issue_id=$2 AND source_agent_id=$3 AND request_id=$4`, in.WorkspaceID, in.IssueID, in.SourceAgentID, in.RequestID).Scan(&oldDecision, &oldHash)
+	err = tx.QueryRow(ctx, `SELECT decision_issue_id,request_hash,initial_task_id FROM project_hierarchy_escalation WHERE workspace_id=$1 AND source_issue_id=$2 AND source_agent_id=$3 AND request_id=$4`, in.WorkspaceID, in.IssueID, in.SourceAgentID, in.RequestID).Scan(&oldDecision, &oldHash, &initialTaskID)
 	if err == nil {
 		if !bytes.Equal(hash[:], oldHash) {
 			return nil, nil, ErrEscalationConflict
@@ -113,7 +113,7 @@ func prepareHierarchyEscalation(ctx context.Context, tx pgx.Tx, p *IssueCreatePa
 		if err != nil {
 			return nil, nil, err
 		}
-		return nil, &IssueCreateResult{Issue: old, EscalationReplayed: true}, nil
+		return nil, &IssueCreateResult{Issue: old, EscalationReplayed: true, AssignedTaskID: initialTaskID}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, err

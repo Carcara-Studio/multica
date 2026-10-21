@@ -1423,6 +1423,7 @@ type ProjectHierarchyDelegation struct {
 	SourceTaskID     pgtype.UUID        `json:"source_task_id"`
 	RequestHash      []byte             `json:"request_hash"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	InitialTaskID    pgtype.UUID        `json:"initial_task_id"`
 }
 
 type ProjectHierarchyEscalation struct {
@@ -1441,6 +1442,7 @@ type ProjectHierarchyEscalation struct {
 	Context             string             `json:"context"`
 	RequestHash         []byte             `json:"request_hash"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	InitialTaskID       pgtype.UUID        `json:"initial_task_id"`
 }
 
 type ProjectResource struct {

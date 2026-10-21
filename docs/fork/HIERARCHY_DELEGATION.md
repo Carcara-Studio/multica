@@ -65,9 +65,9 @@ No separate hierarchy task/executor is introduced.
 
 The initial hook accepts a todo child with native agent_create origin and
 rejects attachments/labels/properties/dates/stages/source capture/channel
-deferral. Ordinary Create options preserve existing behavior. Its ordinary
-post-commit assignment enqueue remains unchanged, including its crash gap:
-this guarantees creation replay, not exactly-once durable dispatch.
+deferral. Ordinary Create options preserve existing behavior. ADR-035 closes the post-commit enqueue gap for new hierarchy operations by
+registering the native initial task atomically with the Issue and receipt.
+Native deferred polling recovers the same task after a crash.
 
 ## Authenticated API
 
@@ -87,13 +87,12 @@ excluded. Creation and replay use the same admission checks.
 
 Response is {issue_id, replayed}: 201 new, 200 replay, 409 changed intent and
 410 deleted child. A receipt does not mean a daemon has started or that a queue
-ID can be recovered from a prior attempt. Fetch native Issue/task resources.
+ID can safely be reconstructed from missing historical rows. Fetch native Issue/task resources.
 The task-scoped CLI exposes this adapter as `multica issue delegate`.
 
 ADR-032 explicitly defines fresh-read authorization, not a task-completion or
 revocation lease spanning commit. No task lock is acquired after Issue/Agent
-locks, avoiding inversion with native completion. The native post-commit
-scheduling gap remains. Parent completion, mentions and Squads are unchanged.
+locks, avoiding inversion with native completion. ADR-035 adds recoverable native task registration. Parent completion, mentions and Squads are unchanged.
 
 ## Task-scoped CLI
 
@@ -138,8 +137,7 @@ is added.
 
 This is server integration coverage using HTTP handlers and PostgreSQL fixtures,
 not a real installed CLI/daemon/provider inference run. CLI transport validation
-remains separately covered by the simulated HTTP suite. The existing dispatch
-crash gap remains. Agent archive consistency is implemented in #92; escalation
+remains separately covered by the simulated HTTP suite. Dispatch crash recovery is specified in ADR-035 (#102). Agent archive consistency is implemented in #92; escalation
 relation validation (#94) and its remaining delivery boundaries are documented
 in [HIERARCHY_ESCALATION.md](./HIERARCHY_ESCALATION.md).
 
@@ -165,3 +163,12 @@ native description sources and canonical parent lookup. Compile/vet/full
 PostgreSQL/race CI is required for the exact merge head. No installed-agent,
 account or inference use is claimed. Automatic fallback and primary recovery
 probes remain disabled.
+
+## Native dispatch recovery (R3 / #102)
+
+ADR-035 persists initial_task_id and the native deferred task in the same Issue
+transaction. Post-commit promotion is best effort; the DB-clock deadline and
+native singular/batch polling recover that same task. Replay never dispatches.
+A NULL historical receipt or missing/deleted task is ambiguous and requires
+native Issue/run inspection and deliberate existing controls; it is never
+backfilled or automatically replayed. No separate hierarchy executor is added.

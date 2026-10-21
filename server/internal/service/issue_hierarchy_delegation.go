@@ -78,12 +78,12 @@ func prepareHierarchyDelegation(ctx context.Context, tx pgx.Tx, p IssueCreatePar
 		return nil, fmt.Errorf("encode delegation intent: %w", err)
 	}
 	hash := sha256.Sum256(intent)
-	var existingID pgtype.UUID
+	var existingID, initialTaskID pgtype.UUID
 	var existingHash []byte
 	err = tx.QueryRow(ctx, `
-SELECT child_issue_id, request_hash FROM project_hierarchy_delegation
+SELECT child_issue_id, request_hash, initial_task_id FROM project_hierarchy_delegation
 WHERE workspace_id = $1 AND parent_issue_id = $2 AND delegator_agent_id = $3 AND request_id = $4
-`, p.WorkspaceID, p.ParentIssueID, p.CreatorID, d.RequestID).Scan(&existingID, &existingHash)
+`, p.WorkspaceID, p.ParentIssueID, p.CreatorID, d.RequestID).Scan(&existingID, &existingHash, &initialTaskID)
 	if err == nil {
 		if !bytes.Equal(existingHash, hash[:]) {
 			return nil, ErrDelegationConflict
@@ -95,7 +95,7 @@ WHERE workspace_id = $1 AND parent_issue_id = $2 AND delegator_agent_id = $3 AND
 		if err != nil {
 			return nil, fmt.Errorf("load delegated child: %w", err)
 		}
-		return &IssueCreateResult{Issue: child, DelegationReplayed: true}, nil
+		return &IssueCreateResult{Issue: child, DelegationReplayed: true, AssignedTaskID: initialTaskID}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("load delegation identity: %w", err)
