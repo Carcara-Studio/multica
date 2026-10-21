@@ -381,6 +381,7 @@ export function onIssueCreated(
   wsId: string,
   issue: Issue,
 ) {
+  qc.invalidateQueries({ queryKey: issueKeys.escalationsAll(wsId) });
   // A custom status this client cannot resolve to a category has no bucket to
   // go in. Inserting nowhere would silently hide an issue that exists on the
   // server, so invalidate the list instead and let the refetch place it.
@@ -428,6 +429,7 @@ export function onIssueUpdated(
     projectChanged?: boolean;
   } = {},
 ) {
+  qc.invalidateQueries({ queryKey: issueKeys.escalationsAll(wsId) });
   // Look up the OLD parent + cached entity before mutating cache state, so we
   // can keep the parent's children cache in sync (powers the sub-issues list
   // shown on the parent issue page) and diff-fallback the change flags.
@@ -775,6 +777,7 @@ export function onIssueDeleted(
   wsId: string,
   issueId: string,
 ) {
+  qc.invalidateQueries({ queryKey: issueKeys.escalationsAll(wsId) });
   cleanupDeletedIssueCaches(qc, wsId, issueId);
   // Deleting an original clears its duplicates' marks server-side.
   qc.invalidateQueries({ queryKey: issueKeys.duplicatesAll(wsId) });

@@ -21,6 +21,18 @@ import type {
 import { ALL_STATUSES } from "./config";
 import { issueColumnCategory } from "./status-category";
 
+export function hierarchyEscalationsOptions(wsId: string, issueId: string) {
+  return infiniteQueryOptions({
+    queryKey: [...issueKeys.escalationsAll(wsId), issueId],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => api.listHierarchyEscalations(issueId, pageParam),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+    enabled: !!wsId && !!issueId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function issueTasksOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.tasks(issueId),
@@ -44,6 +56,7 @@ export interface IssueSortParam {
 }
 
 export const issueKeys = {
+  escalationsAll: (wsId: string) => ["issues", wsId, "hierarchy-escalations"] as const,
   all: (wsId: string) => ["issues", wsId] as const,
   /** PREFIX for invalidation — no sort. */
   list: (wsId: string) => [...issueKeys.all(wsId), "list"] as const,

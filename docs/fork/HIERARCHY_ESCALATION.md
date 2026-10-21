@@ -40,8 +40,13 @@ API/CLI/UI action or new Agent briefing capability in this slice.
 
 Implementation baseline: fork `e1d24a89155515431a1d3dae7b905119eca87cbb`.
 Integrated upstream: `2b645691387e1535cc63d6ebf2ba4e996387c8b2`.
-Current reviewed upstream: `e0e9efc5f1d6ff2a88ad2d7844d4d76f2519985d`;
-its UI-only advance changes no server files.
+Relation-gate review baseline: `e0e9efc5f1d6ff2a88ad2d7844d4d76f2519985d`.
+R2 additionally reviewed `c9b6de856` (Qoder cloud runtime, PR-conflict wakeups,
+tooltip UI and runtime docs). Router/client additions occupy separate sections;
+the Issue detail change does not touch the new panel insertion. Hierarchy/MAT
+admission and R1 creation remain unchanged. Qoder-specific start/completion
+transitions require native regression when integrated in isolated R5 sync; this
+review does not claim that synchronization or real-provider execution.
 
 ## Native routing surfaces reviewed
 
@@ -97,3 +102,39 @@ later-turn credentials, intent conflict/tombstones, expired/revoked MAT and
 stopped task denial, unavailable manager, root human inbox without Agent
 execution, rollback and workspace cleanup. Native PostgreSQL CI is the delivery
 gate; local database absence is not a passing integration result.
+
+## Public surfaces (R2, #100)
+
+ADR-034 exposes `POST /api/issues/{id}/hierarchy-escalations` to the current
+running task's MAT only. Input is `request_id` (persisted nonzero UUID), required
+reason (1-8000 UTF-8 bytes), optional context (up to 16000 bytes), with a 160 KiB
+encoded JSON envelope limit and no unknown fields. The server resolves all
+actor/task/Project/route identities. Returns 201 for registration, 200 for fresh
+authorized replay, and `{issue_id,replayed}`. Invalid input is 400, unavailable
+or unauthorized admission 403, route/intent conflict or deleted decision 409.
+A busy hierarchy is 409; clients preserve identity and inspect the outcome.
+
+`multica issue escalate <id-or-key> --request-id <UUID> --reason <reason>`
+accepts `--context`, `--context-file` or `--context-stdin`. It requires a task
+credential and never automatically retries, reassigns or falls back to another
+operation. Persist the identity before the first call; use unchanged reason and
+context on a later authenticated retry. A new UUID deliberately requests new
+work. The bounded direct-Issue Project briefing advertises these rules only in
+its existing eligible task context; it grants no additional Agent Identity rights.
+
+GET on the same route uses native workspace/Issue read authorization. It returns
+`{items,next_cursor}` for either the source or decision Issue, with up to 50 rows
+and an optional `before=<decision-Issue-UUID>` cursor. Records expose frozen
+source/task/manager or human route, reason/context, current native decision
+status, display names and repair diagnostics. Deleted decisions retain the
+receipt. Read failures are errors, never an empty successful history.
+
+Shared web/desktop Issue detail has an expandable Escalations panel, source and
+decision links, reason/context, native state, manager/human boundary, repair
+messages, explicit refresh and older pages. Native Issue events invalidate these
+workspace-scoped read snapshots. People handle the linked native decision Issue
+with existing controls; creation does not impersonate a running Agent. Queue
+presence is not delivery/execution proof; a missing dispatch prompts inspection,
+not blind replay. Native mobile still sees the decision Issue and root inbox;
+the new dedicated panel is shared web/desktop. R3 recovery and R5 real smoke stay
+open. No schema migration, extra executor or automatic fallback is introduced.

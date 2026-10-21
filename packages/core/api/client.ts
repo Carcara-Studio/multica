@@ -1,3 +1,4 @@
+import { hierarchyEscalationPageSchema, type HierarchyEscalationPage } from "./hierarchy-escalation-schema";
 import type { ZodType } from "zod";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
 import type { WorkspaceWakeupPage, WorkspaceWakeupFilters } from "../types/issue-wakeup";
@@ -1329,6 +1330,14 @@ export class ApiClient {
     const raw = await this.fetch<unknown>(`/api/issue-wakeups?${params}`);
     const parsed = parseWithFallback<WorkspaceWakeupPage | null>(raw, WorkspaceWakeupPageSchema, null, { endpoint: "GET /api/issue-wakeups" });
     if (!parsed) throw new Error("Could not load workspace wakeups");
+    return parsed;
+  }
+
+  async listHierarchyEscalations(issueId: string, before?: string): Promise<HierarchyEscalationPage> {
+    const suffix = before ? `?before=${encodeURIComponent(before)}` : "";
+    const raw = await this.fetch<unknown>(`/api/issues/${encodeURIComponent(issueId)}/hierarchy-escalations${suffix}`);
+    const parsed = parseWithFallback<HierarchyEscalationPage | null>(raw, hierarchyEscalationPageSchema, null, { endpoint: "GET /api/issues/:id/hierarchy-escalations" });
+    if (!parsed) throw new Error("Could not load escalations");
     return parsed;
   }
 

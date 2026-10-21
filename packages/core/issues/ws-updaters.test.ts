@@ -1126,3 +1126,18 @@ describe("project gantt cache invalidation", () => {
     expectInvalidated(qc, issueKeys.projectGantt(WS_ID, PROJECT_ID));
   });
 });
+
+it("invalidates escalation read snapshots on native Issue writes within their workspace", () => {
+  for (const event of ["create", "update", "delete"]) {
+    const qc = new QueryClient();
+    const key = [...issueKeys.escalationsAll(WS_ID), ISSUE_ID];
+    const other = [...issueKeys.escalationsAll("other-workspace"), ISSUE_ID];
+    qc.setQueryData(key, { pages: [] });
+    qc.setQueryData(other, { pages: [] });
+    if (event === "create") onIssueCreated(qc, WS_ID, baseIssue);
+    if (event === "update") onIssueUpdated(qc, WS_ID, { id: ISSUE_ID, status: "done" });
+    if (event === "delete") onIssueDeleted(qc, WS_ID, ISSUE_ID);
+    expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(other)?.isInvalidated).toBe(false);
+  }
+});
