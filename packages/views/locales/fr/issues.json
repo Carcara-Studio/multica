@@ -1,4 +1,20 @@
 {
+  "escalations": {
+    "title": "Escalades",
+    "refresh": "Actualiser",
+    "loading": "Chargement des escalades…",
+    "error": "Impossible de charger les escalades. Actualisez pour réessayer.",
+    "empty": "Aucune demande d’escalade.",
+    "source": "Issue source",
+    "decision": "Ouvrir la décision",
+    "human": "Intervention humaine",
+    "manager": "Responsable direct",
+    "more": "Charger les demandes précédentes",
+    "decision_deleted": "Issue de décision supprimée. Vérifiez la demande initiale avant de créer un nouveau travail.",
+    "decision_reassigned": "Décision réattribuée. Vérifiez son responsable actuel.",
+    "dispatch_not_recorded": "Lancement non enregistré. Examinez les exécutions avant toute récupération.",
+    "manager_unavailable": "Responsable indisponible. Réparez son environnement ou sa hiérarchie sans le contourner."
+  },
   "inline_run": {
     "label": "Exécution de {{name}}",
     "stop": "Arrêter",

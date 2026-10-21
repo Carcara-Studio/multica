@@ -1,4 +1,20 @@
 {
+  "escalations": {
+    "title": "エスカレーション",
+    "refresh": "更新",
+    "loading": "読み込み中…",
+    "error": "読み込めませんでした。更新して再試行してください。",
+    "empty": "エスカレーションの依頼はありません。",
+    "source": "元の Issue",
+    "decision": "判断を開く",
+    "human": "人による対応",
+    "manager": "直属の管理者",
+    "more": "以前の依頼を読み込む",
+    "decision_deleted": "判断用 Issue が削除されています。新しい作業を作成する前に元の依頼を確認してください。",
+    "decision_reassigned": "担当者が変更されています。現在の担当者を確認してください。",
+    "dispatch_not_recorded": "実行の登録がありません。復旧前に実行履歴を確認してください。",
+    "manager_unavailable": "管理者を利用できません。管理者を飛ばさず、実行環境または階層を修復してください。"
+  },
   "inline_run": {
     "label": "{{name}} の実行",
     "stop": "停止",

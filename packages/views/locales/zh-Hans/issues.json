@@ -1,4 +1,20 @@
 {
+  "escalations": {
+    "title": "逐级上报",
+    "refresh": "刷新",
+    "loading": "正在加载…",
+    "error": "无法加载上报记录，请刷新重试。",
+    "empty": "暂无上报请求。",
+    "source": "来源任务",
+    "decision": "打开决策",
+    "human": "人工介入",
+    "manager": "直属上级",
+    "more": "加载更早的请求",
+    "decision_deleted": "决策任务已删除。创建新任务前请检查原始请求。",
+    "decision_reassigned": "决策已重新分配，请检查当前负责人。",
+    "dispatch_not_recorded": "未记录执行调度。尝试恢复前请检查运行记录。",
+    "manager_unavailable": "上级不可用。请修复运行环境或层级关系，不要跳过上级。"
+  },
   "inline_run": {
     "label": "{{name}} 的运行",
     "stop": "停止",

@@ -127,6 +127,7 @@ import { collectDeliverableFiles } from "@multica/core/attachments/deliverables"
 import { AttachmentVersionsProvider } from "./deliverables/attachment-versions";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
+import { HierarchyEscalations } from "./hierarchy-escalations";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -3512,6 +3513,8 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             </div>
             {descDragOver && <FileDropOverlay />}
           </div>
+
+          <HierarchyEscalations key={issue.id} issueId={issue.id} />
 
           {/* Sub-issues — Linear-style */}
           {childIssues.length === 0 && (

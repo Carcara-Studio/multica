@@ -76,6 +76,8 @@ ADR-015 was accepted on 2026-10-16 during MFK-010 and is implementation authorit
 
 [ADR-033](ADR-033-native-escalation-decision-issue.md) defines R1 durable manager decision and root human-intervention Issues under #98.
 
+[ADR-034](ADR-034-escalation-surfaces.md) defines R2 MAT-only escalation transport, task CLI/briefing and read-only native decision management under #100.
+
 ## Required Structure
 
 Use this template:

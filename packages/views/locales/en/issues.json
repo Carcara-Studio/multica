@@ -1,4 +1,20 @@
 {
+  "escalations": {
+    "title": "Escalations",
+    "refresh": "Refresh",
+    "loading": "Loading escalations…",
+    "error": "Could not load escalations. Refresh to retry.",
+    "empty": "No escalation requests.",
+    "source": "Source Issue",
+    "decision": "Open decision",
+    "human": "Human intervention",
+    "manager": "Direct manager",
+    "more": "Load older requests",
+    "decision_deleted": "Decision Issue deleted. Check the original request before creating new work.",
+    "decision_reassigned": "Decision reassigned. Review its current owner.",
+    "dispatch_not_recorded": "Dispatch not recorded. Inspect runs before attempting recovery.",
+    "manager_unavailable": "Manager unavailable. Repair its runtime or hierarchy; do not skip it."
+  },
   "inline_run": {
     "label": "{{name}} run",
     "stop": "Stop",

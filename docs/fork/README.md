@@ -40,7 +40,7 @@ Reconciled on 2026-10-21. The API, management clients, direct-Issue hierarchy
 briefing and task-scoped delegation API/CLI are implemented. Server integration
 coverage connects delegation to native child completion and manager resumption
 (#88). Escalation has an internal durable native decision/intervention operation (#98);
-API/CLI/UI exposure and end-to-end automatic failover remain
+API/CLI/briefing and shared Issue management are being exposed in #100; end-to-end automatic failover remains
 incomplete; no real installed-agent/account/inference smoke is claimed.
 
 | Area | Implemented | Remaining boundary |
@@ -50,7 +50,7 @@ incomplete; no real installed-agent/account/inference smoke is claimed.
 | Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
 | Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
 | Direct-Issue delegation | Bounded Project briefing, one-hop native child creation, durable replay, task-token API/CLI and server completion/resumption regression (#73/#75/#77/#80/#82/#88) | Real CLI/daemon/provider smoke and escalation; native post-commit dispatch gap remains |
-| Upward escalation | Direct-manager/root validation, durable native decision/receipt, MAT/invocation/readiness gates and root human inbox (#94/#98) | API/CLI/briefing/UI (R2), dispatch crash recovery (R3), real smoke (R5) |
+| Upward escalation | Direct-manager/root validation, durable native decision/receipt, MAT/invocation/readiness gates and root human inbox (#94/#98) | R2 surfaces in #100; dispatch crash recovery (R3), real smoke (R5) |
 | Failover foundations | Durable state/config, lifecycle invalidation, scoped evidence/connection/challenge/exchange boundaries, internal Codex config/thread observations and cancellable owned stdin (ADR-016–030) | Production evidence approvals, all writer/retry/claim integration, quota activation and isolated recovery inference |
 | Effective Codex credentials | Source-pinned investigation (#70) | Producer does not expose the required request-bound credential receipt through the inspected account interfaces |
 
