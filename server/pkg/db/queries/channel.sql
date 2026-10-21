@@ -1313,12 +1313,9 @@ RETURNING storage_key;
 -- FOR UPDATE SKIP LOCKED keeps replicas off each other's row; the
 -- object-storage DELETE happens outside any transaction, gated by the lease
 -- token. No row (ErrNoRows) means nothing is due — the sweep is done.
-UPDATE channel_media_pending_object AS obj
-SET state = CASE WHEN obj.state = 'tombstoned' THEN 'tombstoned' ELSE 'deleting' END,
-    lease_token = @lease_token,
-    lease_expires_at = now() + @lease::interval,
-    attempt = obj.attempt + 1
-FROM (
+-- Materialize the candidate once: a nested-loop plan must not rescan LIMIT
+-- for each target row and reserve work that the one-row receipt never returns.
+WITH due AS MATERIALIZED (
     SELECT cand.storage_key FROM channel_media_pending_object AS cand
     WHERE cand.next_attempt_at <= now()
       AND (
@@ -1329,7 +1326,13 @@ FROM (
     ORDER BY cand.next_attempt_at
     LIMIT 1
     FOR UPDATE SKIP LOCKED
-) AS due
+)
+UPDATE channel_media_pending_object AS obj
+SET state = CASE WHEN obj.state = 'tombstoned' THEN 'tombstoned' ELSE 'deleting' END,
+    lease_token = @lease_token,
+    lease_expires_at = now() + @lease::interval,
+    attempt = obj.attempt + 1
+FROM due
 WHERE obj.storage_key = due.storage_key
 RETURNING obj.*;
 
