@@ -537,6 +537,9 @@ func (h *Handler) UpdateAgentRuntime(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusForbidden, "only the runtime owner can change its visibility")
 				return
 			}
+			if h.refuseQoderManagedRuntime(w, r.Context(), rt, "the Qoder runtime is always shared with the workspace") {
+				return
+			}
 			newVisibility = v
 			needVisibility = true
 		}
@@ -1401,6 +1404,9 @@ func (h *Handler) DeleteAgentRuntime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "you can only delete your own runtimes")
 		return
 	}
+	if h.refuseQoderManagedRuntime(w, r.Context(), rt, "disconnect Qoder to remove its runtime") {
+		return
+	}
 	userID := uuidToString(member.UserID)
 
 	profile, hasLiveProfile, err := h.runtimeLiveProfile(r.Context(), rt)
@@ -1622,6 +1628,9 @@ func (h *Handler) UnbindAgentsAndDeleteRuntime(w http.ResponseWriter, r *http.Re
 	}
 	if !canEditRuntime(member, rt) {
 		writeError(w, http.StatusForbidden, "you can only delete your own runtimes")
+		return
+	}
+	if h.refuseQoderManagedRuntime(w, r.Context(), rt, "disconnect Qoder to remove its runtime") {
 		return
 	}
 	userID := uuidToString(member.UserID)
