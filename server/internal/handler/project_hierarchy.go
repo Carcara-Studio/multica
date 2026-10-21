@@ -102,7 +102,7 @@ func writeProjectHierarchyDomainError(w http.ResponseWriter, err error, fallback
 		status = http.StatusBadRequest
 	case projecthierarchy.CodeProjectNotFound, projecthierarchy.CodeMembershipNotFound:
 		status = http.StatusNotFound
-	case projecthierarchy.CodeMembershipExists,
+	case projecthierarchy.CodeHierarchyBusy, projecthierarchy.CodeMembershipExists,
 		projecthierarchy.CodeAgentNotEligible,
 		projecthierarchy.CodeAgentArchived,
 		projecthierarchy.CodeManagerNotActive,

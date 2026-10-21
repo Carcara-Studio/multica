@@ -690,6 +690,9 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 	requesterUserID := requestUserID(r)
 	result, err := h.revokeAndRemoveMember(r.Context(), target.WorkspaceID, target.UserID, target.ID, parseUUID(requesterUserID))
 	if err != nil {
+		if writeHierarchyArchiveConflict(w, err) {
+			return
+		}
 		slog.Warn("delete member failed", append(logger.RequestAttrs(r), "error", err, "member_id", memberID, "workspace_id", workspaceID)...)
 		writeError(w, http.StatusInternalServerError, "failed to delete member")
 		return
@@ -735,6 +738,9 @@ func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.revokeAndRemoveMember(r.Context(), member.WorkspaceID, member.UserID, member.ID, member.UserID)
 	if err != nil {
+		if writeHierarchyArchiveConflict(w, err) {
+			return
+		}
 		slog.Warn("leave workspace failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
 		writeError(w, http.StatusInternalServerError, "failed to leave workspace")
 		return

@@ -74,7 +74,10 @@ func validateActiveTree(rows []db.ProjectAgentMembership) error {
 	return nil
 }
 
-func validateActiveAgents(ctx context.Context, q *db.Queries, workspaceID pgtype.UUID, rows []db.ProjectAgentMembership) error {
+func validateActiveAgents(ctx context.Context, tx pgx.Tx, q *db.Queries, workspaceID pgtype.UUID, rows []db.ProjectAgentMembership) error {
+	if err := lockHierarchyAgents(ctx, tx, workspaceID, rows); err != nil {
+		return err
+	}
 	for _, row := range rows {
 		if row.ArchivedAt.Valid {
 			continue
