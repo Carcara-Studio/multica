@@ -213,6 +213,9 @@ func TestHierarchyDispatchNativeCommentMergeKeepsItsReservedTask(t *testing.T) {
 		t.Fatalf("competing enqueue=%v", err)
 	}
 	comment := util.MustParseUUID(d.f.fx.Comment(t, util.UUIDToString(task.IssueID), "Additional context"))
+	// Native coalescing is thread-scoped. Establish this task's effective
+	// comment thread before testing its same-thread merge/overlay protection.
+	d.f.fx.Exec(t, "UPDATE agent_task_queue SET trigger_comment_id=$2 WHERE id=$1", task.ID, comment)
 	overlay := json.RawMessage(`{"mcpServers":{"comment":{"command":"fixture-only"}}}`)
 	merged, err := q.MergeCommentIntoPendingTask(ctx, db.MergeCommentIntoPendingTaskParams{IssueID: task.IssueID, AgentID: task.AgentID, NewTriggerCommentID: comment, NewOriginatorUserID: task.OriginatorUserID, NewAccountableUserID: task.AccountableUserID, NewOriginatorSource: pgtype.Text{String: "direct_human", Valid: true}, NewTriggerEvidenceKind: pgtype.Text{String: "comment", Valid: true}, NewTriggerEvidenceRefID: comment, NewRuntimeMcpOverlay: overlay})
 	if err != nil || merged.ID != task.ID {

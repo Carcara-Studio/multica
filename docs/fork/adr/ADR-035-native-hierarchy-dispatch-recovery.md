@@ -17,7 +17,7 @@ The native channel Issue path already has an atomic sole-initial-assigned-task
 primitive: createDeferredChannelIssueTaskWithQueries uses transaction-bound
 native planning/attribution and inserts an inert task. Its historical internal
 channel_issue_media_pending marker reserves the native unique pending slot and
-lets ordinary comments merge before claim, including re-attribution and overlay
+preserves native same-thread comment merges before claim, including re-attribution and overlay
 replacement. There are no frontend/daemon media behaviors tied to that marker;
 its consumers are native queue/coalescing/promotion SQL. Removing it would lose
 the native reservation and introduce competing initial runs. Reuse that exact

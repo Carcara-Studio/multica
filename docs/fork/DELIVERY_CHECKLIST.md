@@ -131,7 +131,7 @@ work item is introduced.
 
 ADR-035 closes the new-operation enqueue gap with the native task and receipt
 pointer in the Issue transaction, best-effort post-commit overlay/promotion and
-native DB-clock deadline/polling recovery. It preserves comment coalescing,
+native DB-clock deadline/polling recovery. It preserves native thread-scoped comment coalescing,
 current admission and claim fences, and the root human inbox path. Native due
 promoters recheck deferred status after row-lock waits; early promotion and
 overlay refuse dispatch/start history. Replay never restarts terminal, partial,
