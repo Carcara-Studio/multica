@@ -61,7 +61,9 @@ different delegation architecture.
 The delegation core (#75/#77) provides transactional one-hop validation and
 durable native child creation. The task-token-only API (#80) composes current
 MAT/task bindings, originator-based invocation and native runtime readiness.
-CLI/tool discovery remains pending.
+The task-scoped CLI and bounded direct-Issue briefing (#82) expose
+`multica issue delegate` with an explicit persisted request UUID, no automatic
+retry and no generic-create fallback. Hierarchy management CLI remains separate.
 See [HIERARCHY_DELEGATION.md](./HIERARCHY_DELEGATION.md). The relation gate freezes
 the relevant structural rows; the authenticated adapter supplies the independent
 invocation/runtime gate. Native child creation and replay reuse existing
