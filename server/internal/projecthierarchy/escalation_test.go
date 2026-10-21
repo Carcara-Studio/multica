@@ -212,7 +212,10 @@ func TestEscalationRetainsLocksWithoutWritingOrReassigning(t *testing.T) {
 			if !reflect.DeepEqual(before, after) {
 				t.Fatal("relation check mutated Issue")
 			}
-			for _, table := range []string{"agent_task_queue", "comment", "inbox_item", "issue_wakeup", "activity_log"} {
+			if n := f.fx.Count(t, `SELECT count(*) FROM agent_task_queue t JOIN agent a ON a.id=t.agent_id WHERE a.workspace_id=$1`, f.workspaceID); n != 0 {
+				t.Fatal("relation check created task")
+			}
+			for _, table := range []string{"comment", "inbox_item", "issue_wakeup", "activity_log"} {
 				if n := f.fx.Count(t, `SELECT count(*) FROM `+table+` WHERE workspace_id=$1`, f.workspaceID); n != 0 {
 					t.Fatalf("relation check wrote %s", table)
 				}
