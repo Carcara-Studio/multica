@@ -9,13 +9,13 @@ independently authorize additional delivery work.
 
 ## Fixed scope and completion criteria
 
-All five items below remain open. A helper, audit, mock test or foundation PR
-alone is not completion of an item. Maintain status/evidence in this document as
+R1 is delivered by #98 / PR #99; R2-R5 remain open. A helper, audit, mock test
+or foundation PR alone is not completion of an item. Maintain evidence here as
 work lands; do not replace these identifiers with new phases.
 
 | ID | Agreed delivery | Current status | Completion criteria |
 | --- | --- | --- | --- |
-| R1 | Complete escalation operation | Partial: relation validation delivered (#94 / PR #95); durable operation pending | Persist reason/context and source/target lineage with stable request identity; retries cannot duplicate the request or change its intent silently. Route one direct-manager edge using native permission/readiness and execution fences. Unavailable manager is not skipped. Root reaches a durable, visible human-intervention condition without an Agent/Project-lead loop. Preserve original work/partial execution; no automatic reassignment or replay. Integration tests prove delivery, replay/collision and root behavior. |
+| R1 | Complete escalation operation | Complete: #98 / PR #99, ADR-033; native PG17 manager/root, replay/collision and current-credential authorization coverage. Native dispatch crash recovery remains R3 | Persist reason/context and source/target lineage with stable request identity; retries cannot duplicate the request or change its intent silently. Route one direct-manager edge using native permission/readiness and execution fences. Unavailable manager is not skipped. Root reaches a durable, visible human-intervention condition without an Agent/Project-lead loop. Preserve original work/partial execution; no automatic reassignment or replay. Integration tests prove delivery, replay/collision and root behavior. |
 | R2 | Expose escalation | Pending; follows R1 | Provide the API, CLI, bounded Agent instructions and management UI for the R1 operation. Validate the current task credential, actor/Issue binding and permissions; reject unauthorized/unavailable targets. Show source, destination/root boundary, reason/state and repair needs. Preserve successful existing contracts and test the changed client surfaces. The relation helper alone must not be advertised as executable escalation. |
 | R3 | Recover committed operations whose execution was not dispatched | Pending; existing native post-commit enqueue gap is documented | A server failure between durable registration and native enqueue can be detected and recovered without duplicate work or blind replay of ambiguous partial execution. Define and prove the recovery/reconciliation rule against native execution fences, including restart/concurrency tests. Cover the delivered delegation boundary and applicable escalation delivery; do not create a second general executor. |
 | R4 | Complete automatic model fallback and recovery | Blocked at activation: producer credential/evidence boundary remains unresolved; control-plane foundations exist | Obtain trustworthy request-bound evidence for the effective execution credential/target, integrate all required dispatch/claim/retry writers, switch only on accepted quota evidence, route subsequent work to fallback, and test the primary every 30 minutes with isolated inference. Recover safely when the primary is available. Prove concurrency/crash/partial-execution behavior and the accepted provider compatibility policy. Automatic fallback/probes stay disabled until the evidence and execution gates actually pass; control-plane tests cannot close this item. |
@@ -87,3 +87,18 @@ This document controls remaining scope; it does not weaken security, data
 integrity, architecture decisions or required regression gates to force a date.
 Necessary fixes must be justified against an agreed criterion, not invented as
 new product goals.
+
+
+## R1 delivery evidence (#98 / PR #99)
+
+The native decision/intervention operation is specified in ADR-033 and
+HIERARCHY_ESCALATION.md. PostgreSQL 17 race CI exercises service delivery,
+concurrency/replay/collision, current MAT/originator/readiness admission,
+root recipients, atomic rollback and workspace cleanup. The final PR head must
+pass the full backend, migration, SQLC, agent, Windows and vulnerability gates
+before integration. Initial CI 39641632646 passed handler (100.720s), service
+(21.623s) and hierarchy (4.322s); its static migration guard caught an omitted
+concurrent-index retry registration. The PR adds that native registration and
+an isolated up/down/up migration test; the final full CI is the merge gate.
+No real installed CLI, daemon or provider inference was used. Public operation
+exposure remains R2, and native post-commit enqueue reconciliation remains R3.

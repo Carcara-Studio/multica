@@ -1,6 +1,6 @@
 # Project hierarchy escalation
 
-## Implemented boundary (#94)
+## Relation boundary (#94)
 
 The first ADR-005 slice is an internal, caller-transaction relation gate in
 `server/internal/projecthierarchy/escalation.go`. It validates the acting Agent's
@@ -52,22 +52,31 @@ its UI-only advance changes no server files.
 | `server/internal/inbox/create.go`: `CreateIfEligible` | Membership-scoped insertion; ineligible recipients produce no insertion | Does not choose a human recipient or define a Project intervention lifecycle. Root boundary must remain visible when Project lead is an Agent or no lead exists |
 | `server/internal/service/issue_hierarchy_delegation.go` | Durable explicit request identity, intent collision and deleted-child handling | Its receipt is specifically a native child-creation contract. Do not overload it for a decision/intervention request |
 
-## Remaining delivery work
+## Durable operation (R1, #98)
 
-Before adding routing, settle a focused durable escalation operation under
-ADR-005: request identity and reason/context, frozen source/target lineage,
-collision/replay/re-authorization rules, tombstones and commit/delivery recovery.
-Select ordinary Issue/comment/inbox/wakeup facilities where they satisfy those
-contracts. The root needs a durable Project human-intervention surface and an
-explicit recipient/visibility policy that works without an Agent lead loop;
-a boolean relation result alone does not meet that requirement.
+[ADR-033](./adr/ADR-033-native-escalation-decision-issue.md) selects a native
+child decision Issue. `IssueService.Escalate` persists reason/context, source
+membership/task lineage, frozen manager/root route and stable request identity
+in the Issue creation transaction. Original work stays unchanged. Manager
+assignment uses native enqueue and originator invocation/runtime admission;
+no unavailable manager is skipped.
 
-Then compose the current task credential and native invocation/runtime gates,
-manager execution fencing/coalescing and root intervention persistence in one
-bounded operation. Define authorization separately from topology and preserve
-work artifacts and partial execution; no automatic reassignment, replay or
-recursive fan-out. Only after that operation has integration coverage should
-API, CLI, Agent briefing and UI advertise escalation.
+At root, the visibly titled human-intervention Issue is unassigned. Native
+action-required inbox items commit atomically for workspace owners/admins plus
+a valid member Project lead, deduplicated. Agent leads never route the request.
+No eligible human causes rollback. Native Inbox schemas tolerate unknown type
+strings and display the title; explicit client actions belong to R2.
+
+Same identity/intent returns the current original decision after fresh MAT/task,
+hierarchy and invocation/readiness checks. Changed reason/context or manager
+route conflicts. Deleted decisions retain tombstones. A later turn can retry
+with fresh credentials while original lineage is retained. Replay creates no
+Issue, counter increment, event, task or duplicate inbox. Another upward hop
+requires an explicit operation from the manager's own Issue/execution.
+
+R2 owns API/CLI, Agent briefing and management UI exposure. R3 owns the native
+post-commit enqueue crash gap: replay never blindly enqueues again. R5 owns real
+installed-Agent/account smoke. These are the existing fixed checklist items.
 
 ## Validation
 
@@ -82,3 +91,9 @@ unchanged Issue content and no new Issue/task/comment/inbox/wakeup/activity.
 These are server structural tests, not real installed-Agent/provider smoke and
 not proof of delivered escalation notifications. Native delegation, lifecycle,
 no-Project/direct-Agent/Squad and runtime regressions remain compatibility gates.
+
+R1 integration tests cover manager delivery/originator, concurrent replay,
+later-turn credentials, intent conflict/tombstones, expired/revoked MAT and
+stopped task denial, unavailable manager, root human inbox without Agent
+execution, rollback and workspace cleanup. Native PostgreSQL CI is the delivery
+gate; local database absence is not a passing integration result.

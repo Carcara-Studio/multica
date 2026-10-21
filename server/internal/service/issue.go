@@ -102,6 +102,8 @@ type IssueCreateParams struct {
 type IssueCreateOpts struct {
 	// HierarchyDelegation opts into internal one-hop admission and durable replay.
 	HierarchyDelegation *HierarchyDelegationCreate
+	// HierarchyEscalation is the internal R1 operation; no client target is trusted.
+	HierarchyEscalation *HierarchyEscalationCreate
 
 	// BroadcastPayload, if non-nil, is invoked after the issue row is
 	// created and attachments are linked. Its return value is sent as
@@ -199,6 +201,8 @@ var ErrSourceContextAlreadyAttached = errors.New("source context is already atta
 type IssueCreateResult struct {
 	// DelegationReplayed means no creation event or assignment was emitted.
 	DelegationReplayed bool
+	// EscalationReplayed returns the existing decision without new side effects.
+	EscalationReplayed bool
 
 	Issue       db.Issue
 	Attachments []db.Attachment
@@ -246,6 +250,21 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 	defer tx.Rollback(ctx)
 	qtx := s.Queries.WithTx(tx)
 	issueID := dbid.NewV7()
+	var escalation *escalationCreateState
+	if opts.HierarchyEscalation != nil {
+		if opts.HierarchyDelegation != nil || !opts.AssignedAgentRunFireAt.IsZero() {
+			return IssueCreateResult{}, ErrEscalationInvalid
+		}
+		var replay *IssueCreateResult
+		escalation, replay, err = prepareHierarchyEscalation(ctx, tx, &p, *opts.HierarchyEscalation, issueID)
+		if err != nil {
+			return IssueCreateResult{}, err
+		}
+		if replay != nil {
+			return *replay, nil
+		}
+		p.AllowDuplicate = true
+	}
 	if opts.HierarchyDelegation != nil {
 		replay, err := prepareHierarchyDelegation(ctx, tx, p, opts, issueID)
 		if err != nil {
@@ -517,6 +536,12 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		}
 	}
 
+	if escalation != nil {
+		if err := escalation.finish(ctx, tx, issue); err != nil {
+			return IssueCreateResult{}, err
+		}
+	}
+
 	if !opts.AssignedAgentRunFireAt.IsZero() && s.shouldEnqueueAgentTaskWithQueries(ctx, qtx, issue) {
 		// The issue must never become visible without its media-gated assigned
 		// task. Inserting both rows through qtx makes the unique-index winner
@@ -532,6 +557,11 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		return IssueCreateResult{}, fmt.Errorf("commit: %w", err)
 	}
 
+	if escalation != nil {
+		for _, item := range escalation.inbox {
+			(&IssueWakeupService{Tasks: s.TaskService}).publishSystemInbox(item, issue.Status)
+		}
+	}
 	attachments := s.linkAttachments(ctx, issue, p.AttachmentIDs)
 
 	actorID := opts.ActorID
