@@ -79,8 +79,8 @@ with fresh credentials while original lineage is retained. Replay creates no
 Issue, counter increment, event, task or duplicate inbox. Another upward hop
 requires an explicit operation from the manager's own Issue/execution.
 
-R2 owns API/CLI, Agent briefing and management UI exposure. R3 owns the native
-post-commit enqueue crash gap: replay never blindly enqueues again. R5 owns real
+R2 owns API/CLI, Agent briefing and management UI exposure. ADR-035 addresses R3 with atomic native initial-task registration for manager
+decisions and native deadline/polling recovery: replay never enqueues again. R5 owns real
 installed-Agent/account smoke. These are the existing fixed checklist items.
 
 ## Validation
@@ -136,5 +136,7 @@ workspace-scoped read snapshots. People handle the linked native decision Issue
 with existing controls; creation does not impersonate a running Agent. Queue
 presence is not delivery/execution proof; a missing dispatch prompts inspection,
 not blind replay. Native mobile still sees the decision Issue and root inbox;
-the new dedicated panel is shared web/desktop. R3 recovery and R5 real smoke stay
-open. No schema migration, extra executor or automatic fallback is introduced.
+the new dedicated panel is shared web/desktop. The R2 surface itself introduces no migration or executor. ADR-035 / #102 adds
+nullable initial_task_id receipt columns for R3; root intervention retains its
+atomic human inbox without an Agent task. Historical NULL/deleted-task evidence
+requires inspection, never reconstruction. R5 real smoke remains open.

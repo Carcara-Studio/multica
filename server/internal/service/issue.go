@@ -542,6 +542,14 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		}
 	}
 
+	hierarchyOperation := opts.HierarchyDelegation != nil || opts.HierarchyEscalation != nil
+	if hierarchyOperation {
+		assignedTask, err = s.prepareHierarchyDispatch(ctx, tx, issue, opts)
+		if err != nil {
+			return IssueCreateResult{}, err
+		}
+	}
+
 	if !opts.AssignedAgentRunFireAt.IsZero() && s.shouldEnqueueAgentTaskWithQueries(ctx, qtx, issue) {
 		// The issue must never become visible without its media-gated assigned
 		// task. Inserting both rows through qtx makes the unique-index winner
@@ -595,7 +603,10 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 
 	s.publishIssueCreated(issue, attachments, labels, p.CreatorType, actorID, opts)
 	s.captureCreatedAnalytics(issue, p.CreatorType, actorID, opts)
-	if opts.AssignedAgentRunFireAt.IsZero() {
+	if hierarchyOperation {
+		assignedTaskID = assignedTask.ID
+		s.finishHierarchyDispatch(ctx, assignedTask)
+	} else if opts.AssignedAgentRunFireAt.IsZero() {
 		assignedTaskID = s.maybeEnqueueOnAssign(ctx, issue, p.CreatorType, actorID, opts.AssignedAgentRunFireAt)
 	}
 

@@ -421,6 +421,7 @@ RETURNING *;
 UPDATE agent_task_queue
 SET status = 'queued', fire_at = NULL
 WHERE id = $1 AND issue_id IS NOT NULL AND status = 'deferred'
+  AND dispatched_at IS NULL AND started_at IS NULL
 RETURNING *;
 
 -- name: SetDeferredChannelIssueTaskRuntimeOverlay :execrows
@@ -432,6 +433,7 @@ SET runtime_mcp_overlay = sqlc.narg(runtime_mcp_overlay),
     runtime_connected_apps = sqlc.narg(runtime_connected_apps)
 WHERE id = @id
   AND status = 'deferred'
+  AND dispatched_at IS NULL AND started_at IS NULL
   AND context->>'channel_issue_media_pending' = 'true'
   AND trigger_comment_id IS NULL
   AND originator_user_id IS NOT DISTINCT FROM sqlc.narg(expected_originator_user_id)::uuid;
@@ -2228,6 +2230,8 @@ WITH due AS (
 UPDATE agent_task_queue
 SET status = 'queued'
 WHERE id IN (SELECT id FROM due WHERE issue_id IS NULL OR rn = 1)
+  -- Recheck after waiting on a concurrent claim/cancel of the target row.
+  AND status = 'deferred'
 RETURNING *;
 
 -- name: ListQueuedClaimCandidatesByRuntimes :many
@@ -2331,6 +2335,8 @@ WITH due AS (
 UPDATE agent_task_queue
 SET status = 'queued'
 WHERE id IN (SELECT id FROM due WHERE issue_id IS NULL OR rn = 1)
+  -- Recheck after waiting on a concurrent claim/cancel of the target row.
+  AND status = 'deferred'
 RETURNING *;
 
 -- name: ListActiveTasksByIssue :many
