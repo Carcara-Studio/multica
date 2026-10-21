@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -92,8 +93,12 @@ func CheckDelegationRelation(ctx context.Context, tx pgx.Tx, in DelegationRelati
 			continue
 		}
 		var locked pgtype.UUID
-		if err := tx.QueryRow(ctx, "SELECT id FROM agent WHERE id = $1 AND workspace_id = $2 FOR SHARE", id, in.WorkspaceID).Scan(&locked); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT id FROM agent WHERE id = $1 AND workspace_id = $2 FOR SHARE NOWAIT", id, in.WorkspaceID).Scan(&locked); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
+				return deny()
+			}
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "55P03" {
 				return deny()
 			}
 			return empty, fmt.Errorf("lock delegation agent: %w", err)

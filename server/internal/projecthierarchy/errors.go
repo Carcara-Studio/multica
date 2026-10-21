@@ -10,6 +10,7 @@ import (
 type ErrorCode string
 
 const (
+	CodeHierarchyBusy          ErrorCode = "hierarchy_busy"
 	CodeInvalidInput           ErrorCode = "invalid_input"
 	CodeProjectNotFound        ErrorCode = "project_not_found"
 	CodeMembershipNotFound     ErrorCode = "membership_not_found"

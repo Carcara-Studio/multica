@@ -12,7 +12,7 @@ The official upstream repository is `multica-ai/multica`. Upstream-owned root do
 - [`REGRESSION_BASELINE.md`](./REGRESSION_BASELINE.md) — upstream CI/test baseline, protected behavior map, confirmed coverage gaps, and pre-implementation gates.
 - [`FAIL-001_INVESTIGATION.md`](./FAIL-001_INVESTIGATION.md) — current failover call-site inventory, evidence corrections and unclosed integration gates.
 - [`CODEX_CREDENTIAL_BOUNDARY.md`](./CODEX_CREDENTIAL_BOUNDARY.md) — pinned Codex source audit, credential-observation dependency and dispatch-bound acceptance requirements.
-- [`HIERARCHY_AGENT_LIFECYCLE.md`](./HIERARCHY_AGENT_LIFECYCLE.md) — archive-writer/lock audit and implementation gates; lifecycle enforcement remains pending (#90).
+- [`HIERARCHY_AGENT_LIFECYCLE.md`](./HIERARCHY_AGENT_LIFECYCLE.md) — archive-writer/lock audit and atomic lifecycle enforcement (#90/#92).
 - [`adr/`](./adr/) — Architecture Decision Records for structural fork decisions.
 
 ## Authority
@@ -32,16 +32,16 @@ If current upstream behavior contradicts an assumption in the blueprint or an AD
 Reconciled on 2026-10-21. The API, management clients, direct-Issue hierarchy
 briefing and task-scoped delegation API/CLI are implemented. Server integration
 coverage connects delegation to native child completion and manager resumption
-(#88). Escalation, Agent lifecycle rules and end-to-end automatic failover remain
+(#88). Escalation and end-to-end automatic failover remain
 incomplete; no real installed-agent/account/inference smoke is claimed.
 
 | Area | Implemented | Remaining boundary |
 | --- | --- | --- |
-| Hierarchy persistence/domain | Schema, Project/Workspace cleanup, serialized full-tree validation and structural mutations (#16/#18) | Agent lifecycle enforcement under ADR-006; writer/lock audit completed (#90) |
+| Hierarchy persistence/domain | Schema, Project/Workspace cleanup, serialized full-tree mutations and atomic Agent archive/leaf deactivation (#16/#18/#92) | Restore requires explicit hierarchy re-entry; no automatic reparenting |
 | Hierarchy API | Five Project-scoped routes around the authoritative service (#22) | No duplicate API implementation needed |
 | Web/desktop management | Shared Project hierarchy UI (#32) | Runtime/briefing/delegation semantics are separate |
 | Native mobile management | Mobile data layer and Project hierarchy screens (#33, Issue #28) | Independent mobile checks remain required for mobile changes |
-| Direct-Issue delegation | Bounded Project briefing, one-hop native child creation, durable replay, task-token API/CLI and server completion/resumption regression (#73/#75/#77/#80/#82/#88) | Real CLI/daemon/provider smoke, escalation and lifecycle integration; native post-commit dispatch gap remains |
+| Direct-Issue delegation | Bounded Project briefing, one-hop native child creation, durable replay, task-token API/CLI and server completion/resumption regression (#73/#75/#77/#80/#82/#88) | Real CLI/daemon/provider smoke and escalation; native post-commit dispatch gap remains |
 | Failover foundations | Durable state/config, lifecycle invalidation, scoped evidence/connection/challenge/exchange boundaries, internal Codex config/thread observations and cancellable owned stdin (ADR-016–030) | Production evidence approvals, all writer/retry/claim integration, quota activation and isolated recovery inference |
 | Effective Codex credentials | Source-pinned investigation (#70) | Producer does not expose the required request-bound credential receipt through the inspected account interfaces |
 
@@ -57,7 +57,7 @@ hierarchy snapshot to directly assigned Issue claims. See
 [HIERARCHY_BRIEFING.md](./HIERARCHY_BRIEFING.md) for exclusions and bounds. It grants
 no delegation authority and does not cover chat/autopilot/quick-create or Squad
 tasks. Direct-report delegation and native completion/resumption are described
-below; escalation and Agent lifecycle integration remain pending. Before each
+below; escalation remains pending. Before each
 next slice, create a focused Issue, reinspect
 current hooks and preserve no-Project/direct-Agent/Squad regressions. CLI
 management remains a separate pending adapter. This roadmap does not authorize a

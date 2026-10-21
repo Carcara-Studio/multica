@@ -25,6 +25,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/failover"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
+	"github.com/multica-ai/multica/server/internal/projecthierarchy"
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
@@ -2680,6 +2681,13 @@ func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Warn("archive agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 		writeError(w, http.StatusInternalServerError, "failed to archive agent")
+		return
+	}
+
+	if err := projecthierarchy.GuardArchivedAgents(r.Context(), tx, archived.WorkspaceID, []db.Agent{archived}); err != nil {
+		if !writeHierarchyArchiveConflict(w, err) {
+			writeError(w, http.StatusInternalServerError, "failed to validate hierarchy archive")
+		}
 		return
 	}
 

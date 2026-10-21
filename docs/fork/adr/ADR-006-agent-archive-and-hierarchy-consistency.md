@@ -147,14 +147,25 @@ For leaf Agent archival:
 
 ```text
 BEGIN
-  lock Agent / affected hierarchy Projects in deterministic order
+  acquire native Agent archive row locks
+  inspect affected memberships behind those locks
   validate Agent is not active root/manager anywhere
   archive active leaf memberships
   archive Agent
 COMMIT
 ```
 
-Exact lock ordering must be designed to avoid deadlocks with existing Agent lifecycle transactions. Project locks should follow a deterministic Project-ID ordering when one Agent belongs to several Projects.
+Implementation protocol selected in #92 after the #90 writer audit: structural
+transactions retain their Project lock and acquire `FOR SHARE NOWAIT` on every
+originally active Agent and every newly activated Agent before membership writes.
+This includes membership deactivation. Native archive updates acquire conflicting
+Agent locks; the shared archive guard then discovers all memberships and either
+rejects structural dependencies or deactivates leaves in that same transaction.
+The archive guard never acquires Project locks. Nonblocking Agent admission avoids
+introducing an inverse wait edge into native runtime/subscriber/Issue lock orders.
+Delegation uses nonblocking shared Agent locks too. Busy structural changes fail
+closed with a retryable conflict; no automatic replay is introduced. See
+`docs/fork/HIERARCHY_AGENT_LIFECYCLE.md` for the wait graph and validation scope.
 
 No `ON DELETE SET NULL` manager behavior is allowed as a substitute for lifecycle handling.
 
@@ -222,5 +233,5 @@ If upstream introduces a lifecycle-hook mechanism, prefer registering hierarchy 
 
 ## Open Questions
 
-- Exact current transaction boundaries and lock order of all Agent archival writers must be mapped during HIER-010 before code changes.
+- Writer/transaction audit completed in #90; #92 selects and implements the protocol above.
 - Batch archive error UX should follow the existing upstream batch contract while preserving the no-invalid-commit invariant.

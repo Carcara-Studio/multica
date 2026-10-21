@@ -109,6 +109,12 @@ func (s *Service) beginProjectMutation(
 		_ = tx.Rollback(ctx)
 		return nil, nil, nil, fmt.Errorf("list hierarchy memberships: %w", err)
 	}
+	// Lock original memberships as well as the eventual active tree: removing a
+	// leaf must also serialize with Agent archival.
+	if err := lockHierarchyAgents(ctx, tx, workspaceID, rows); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, nil, nil, err
+	}
 	return tx, q, rows, nil
 }
 
@@ -172,7 +178,7 @@ func (s *Service) CreateMembership(ctx context.Context, input CreateMembershipIn
 	if err := validateActiveTree(tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
-	if err := validateActiveAgents(ctx, q, input.WorkspaceID, tentative); err != nil {
+	if err := validateActiveAgents(ctx, tx, q, input.WorkspaceID, tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
 
@@ -236,7 +242,7 @@ func (s *Service) ReparentMembership(ctx context.Context, input ReparentMembersh
 	if err := validateActiveTree(tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
-	if err := validateActiveAgents(ctx, q, input.WorkspaceID, tentative); err != nil {
+	if err := validateActiveAgents(ctx, tx, q, input.WorkspaceID, tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
 
@@ -285,7 +291,7 @@ func (s *Service) ArchiveMembership(ctx context.Context, input ArchiveMembership
 	if err := validateActiveTree(tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
-	if err := validateActiveAgents(ctx, q, input.WorkspaceID, tentative); err != nil {
+	if err := validateActiveAgents(ctx, tx, q, input.WorkspaceID, tentative); err != nil {
 		return db.ProjectAgentMembership{}, err
 	}
 
@@ -334,7 +340,7 @@ func (s *Service) ApplyStructure(ctx context.Context, input ApplyStructureInput)
 	if err := validateActiveTree(tentative); err != nil {
 		return nil, err
 	}
-	if err := validateActiveAgents(ctx, q, input.WorkspaceID, tentative); err != nil {
+	if err := validateActiveAgents(ctx, tx, q, input.WorkspaceID, tentative); err != nil {
 		return nil, err
 	}
 
@@ -372,7 +378,7 @@ func (s *Service) ApplyStructure(ctx context.Context, input ApplyStructureInput)
 	if err := validateActiveTree(persisted); err != nil {
 		return nil, fmt.Errorf("revalidate persisted hierarchy: %w", err)
 	}
-	if err := validateActiveAgents(ctx, q, input.WorkspaceID, persisted); err != nil {
+	if err := validateActiveAgents(ctx, tx, q, input.WorkspaceID, persisted); err != nil {
 		return nil, fmt.Errorf("revalidate persisted hierarchy agents: %w", err)
 	}
 	if err := commitMutation(ctx, tx); err != nil {
