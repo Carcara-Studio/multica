@@ -25,6 +25,7 @@ const (
 	CodeOrphaningMembership    ErrorCode = "orphaning_membership"
 	CodeDuplicateChange        ErrorCode = "duplicate_change"
 	CodeDelegationNotAllowed   ErrorCode = "delegation_not_allowed"
+	CodeEscalationNotAllowed   ErrorCode = "escalation_not_allowed"
 )
 
 // DomainError represents an expected hierarchy-domain rejection. Infrastructure
