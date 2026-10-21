@@ -41,7 +41,9 @@ func TestHierarchyAgentArchiveStructuralConflictRollsBack(t *testing.T) {
 				r := createHierarchyMembershipViaAPI(t, other, hierarchyAPIAgent(t, "other root"), nil, "Root")
 				createHierarchyMembershipViaAPI(t, other, victim, &r.ID, "Leaf elsewhere")
 			}
-			task := dbfx.Task(t, victim)
+			runtime := dbfx.Runtime(t, "Hierarchy archive task")
+			dbfx.Exec(t, `UPDATE agent SET runtime_id=$1 WHERE id=$2`, runtime, victim)
+			task := dbfx.Task(t, victim, testutil.Cols{"runtime_id": runtime})
 			w := archiveHierarchyAgent(t, victim, http.StatusConflict)
 			var response struct {
 				Code     string `json:"code"`
