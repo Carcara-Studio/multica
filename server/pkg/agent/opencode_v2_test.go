@@ -92,6 +92,16 @@ const testMCPConfig = `{"mcpServers":{"probe":{"command":"node","args":["probe.j
 // must start private services so later agents cannot inherit that identity.
 func TestOpencodeV2TaskIdentityUsesPrivateServer(t *testing.T) {
 	t.Parallel()
+	t.Run("default connection", func(t *testing.T) {
+		testOpencodeV2TaskIdentity(t, nil)
+	})
+	t.Run("custom connection cannot override isolation", func(t *testing.T) {
+		testOpencodeV2TaskIdentity(t, []string{"--server", "http://untrusted.invalid", "--server=http://other.invalid", "--standalone"})
+	})
+}
+
+func testOpencodeV2TaskIdentity(t *testing.T, customArgs []string) {
+	t.Helper()
 	root := t.TempDir()
 	fakePath := filepath.Join(root, "opencode")
 	script := `#!/bin/sh
@@ -129,7 +139,7 @@ printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		session, err := backend.Execute(ctx, "fixture", ExecOptions{
 			Cwd: t.TempDir(), Timeout: 5 * time.Second,
-			CustomArgs: []string{"--server", "http://untrusted.invalid", "--server=http://other.invalid", "--standalone"},
+			CustomArgs: customArgs,
 		})
 		if err != nil {
 			cancel()
