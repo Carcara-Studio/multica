@@ -25,6 +25,10 @@ for (const explicitCache of [false, true]) {
           LOCALAPPDATA: join(dir, "local app data"), APPDATA: join(dir, "roaming app data"),
           USERPROFILE: join(dir, "profile"), GOTMPDIR: join(dir, "go temp"),
           TMPDIR: join(dir, "temp"), TMP: join(dir, "temp"), TEMP: join(dir, "temp"),
+          // Keep Turbo's own global config independent of the fixture's fake
+          // Windows profile; native known-folder lookup requires a real profile.
+          TURBO_CONFIG_DIR_PATH: join(dir, "turbo config"),
+          VERCEL_CONFIG_DIR_PATH: join(dir, "vercel config"),
           MULTICA_TEST_UNLISTED: "must-not-reach-child", TURBO_TELEMETRY_DISABLED: "1" };
         for (const key of ["GOCACHE", "GOPATH", "GOMODCACHE", "XDG_CACHE_HOME"]) delete env[key];
         if (explicitCache) {
@@ -34,7 +38,7 @@ for (const explicitCache of [false, true]) {
         }
         const keys = ["LOCALAPPDATA", "APPDATA", "USERPROFILE", "GOCACHE", "GOPATH", "GOMODCACHE", "GOTMPDIR", "TMPDIR", "TMP", "TEMP"];
         const expected = Object.fromEntries(keys.filter(k => env[k] !== undefined).map(k => [k, env[k]]));
-        for (const path of [env.HOME, ...Object.values(expected)]) mkdirSync(path, { recursive: true });
+        for (const path of [env.HOME, env.TURBO_CONFIG_DIR_PATH, env.VERCEL_CONFIG_DIR_PATH, ...Object.values(expected)]) mkdirSync(path, { recursive: true });
         writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "turbo-go-fixture", private: true,
           packageManager: "pnpm@10.28.2", scripts: { probe: "node probe.cjs" } }));
         writeFileSync(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\nimporters:\n  .: {}\n");
