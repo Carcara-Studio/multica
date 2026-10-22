@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { owns, sameProcess, run } from './dev-env-windows.mjs';
+import { owns, sameProcess, run, quoteWindowsArgument } from './dev-env-windows.mjs';
 
 const root = { pid: 10, parent: 1, birth: '100' };
 const child = { pid: 20, parent: 10, birth: '200' };
@@ -29,6 +29,36 @@ test('recorded listeners survive parent exit but never PID reuse', () => {
   assert.equal(sameProcess(root, { ...root, birth: '101' }), false);
 });
 
+test('native command line quotes empty arguments, spaces, quotes and trailing backslashes', () => {
+  for (const [input, expected] of [["", "\"\""], ["two words", "\"two words\""], ["a\"b", "\"a\\\"b\""], ["C:\\folder\\", "\"C:\\folder\\\\\""], ["a\\\"b", "\"a\\\\\\\"b\""]]) {
+    assert.equal(quoteWindowsArgument(input), expected);
+  }
+});
+
+function consoleState(pid) {
+  const source = `
+    $ErrorActionPreference='Stop';
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class FixtureConsole {
+  [DllImport("kernel32.dll")] public static extern bool FreeConsole();
+  [DllImport("kernel32.dll")] public static extern bool AttachConsole(uint pid);
+  [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+}
+'@
+    $null = [FixtureConsole]::FreeConsole();
+    if (![FixtureConsole]::AttachConsole(${pid})) { throw 'Fixture has no console' };
+    try {
+      $window = [FixtureConsole]::GetConsoleWindow();
+      @{hasConsole=($window -ne [IntPtr]::Zero); visible=[FixtureConsole]::IsWindowVisible($window)} | ConvertTo-Json -Compress
+    } finally { $null = [FixtureConsole]::FreeConsole() }
+  `;
+  return JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
+    Buffer.from(source, 'utf16le').toString('base64')], {encoding:'utf8', windowsHide:true, timeout:30000}));
+}
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(read, description) {
   for (let i = 0; i < 100; i++) {
@@ -41,7 +71,7 @@ async function waitFor(read, description) {
 
 test('Git Bash launches, identifies and stops native child listeners without touching foreign processes',
   { skip: process.platform !== 'win32', timeout: 180000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'multica-dev-process-'));
+    const dir = mkdtempSync(join(tmpdir(), 'multica dev process '));
     const file = join(dir, 'api.windows.json');
     const portFile = join(dir, 'port.json');
     const fixture = join(dir, 'fixture.mjs');
@@ -53,6 +83,8 @@ test('Git Bash launches, identifies and stops native child listeners without tou
         const server = createServer((req, res) => res.end(JSON.stringify({pid:process.pid})));
         server.listen(0, '127.0.0.1', () => writeFileSync(process.argv[3], JSON.stringify({port:server.address().port,pid:process.pid})));
       } else {
+        console.log('fixture stdout');
+        console.error('fixture stderr');
         spawn(process.execPath, [process.argv[1], 'child', process.argv[2]], {stdio:'ignore'});
         setInterval(() => {}, 1000);
       }
@@ -77,6 +109,12 @@ test('Git Bash launches, identifies and stops native child listeners without tou
       assert.equal(await run(['listener', String(port)]), data.pid);
       assert.equal(await run(['owns', file, String(data.pid)]), data.pid);
       await run(['record', file, String(data.pid)]);
+      const launched = JSON.parse(readFileSync(file, 'utf8'));
+      assert.deepEqual(consoleState(launched.root.pid), {hasConsole:true, visible:false});
+      assert.deepEqual(consoleState(data.pid), {hasConsole:true, visible:false});
+      const log = readFileSync(join(dir, 'api.log'), 'utf8');
+      assert.match(log, /fixture stdout/);
+      assert.match(log, /fixture stderr/);
       await assert.rejects(run(['owns', file, String(process.pid)]), /not owned/);
       valid = JSON.parse(readFileSync(file, 'utf8'));
       writeFileSync(file, JSON.stringify({ root: { ...valid.root, birth: '1' }, listeners: [] }));
