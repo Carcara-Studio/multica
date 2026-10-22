@@ -203,7 +203,18 @@ EOF
 # The trailing `|| true` is load-bearing on macOS's bash 3.2: `x="$(fn)"` inside
 # a function aborts the script under `set -e` when fn's last command fails, and
 # "no process is listening" is the normal answer here, not an error.
+windows_dev_platform() {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0 ;; *) return 1 ;; esac
+}
+
+windows_process() { node "$REPO_ROOT/scripts/dev-env-windows.mjs" "$@"; }
+windows_receipt() { printf "%s/%s.windows.json" "$STATE_DIR" "$1"; }
+
 port_listener_pid() {
+  if windows_dev_platform; then
+    windows_process listener "$1" || printf unknown
+    return
+  fi
   lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
 }
 
@@ -431,6 +442,10 @@ listener_pid_file() { printf '%s/%s.listener.pid' "$STATE_DIR" "$1"; }
 log_file()  { printf '%s/%s.log' "$LOG_DIR" "$1"; }
 
 component_pid() {
+  if windows_dev_platform; then
+    windows_process alive "$(windows_receipt "$1")" 2>/dev/null
+    return
+  fi
   local file
   file="$(pid_file "$1")"
   [ -f "$file" ] || return 1
@@ -446,6 +461,11 @@ component_pid() {
 launch_detached() {
   local name=$1
   shift
+  if windows_dev_platform; then
+    "${CLEAN_ENV[@]}" node "$REPO_ROOT/scripts/dev-env-windows.mjs" launch \
+      "$(windows_receipt "$name")" "$(log_file "$name")" "$@" > "$(pid_file "$name")"
+    return
+  fi
   (
     set -m
     nohup "${CLEAN_ENV[@]}" "$@" > "$(log_file "$name")" 2>&1 < /dev/null &
@@ -503,6 +523,10 @@ process_is_descendant_of() {
 }
 
 listener_pid_belongs_to_component() {
+  if windows_dev_platform; then
+    windows_process owns "$(windows_receipt "$1")" "$2" >/dev/null 2>&1
+    return
+  fi
   local component=$1 listener=$2 launcher recorded
   launcher="$(component_pid "$component" || true)"
   [ -n "$launcher" ] && [ -n "$listener" ] || return 1
@@ -525,6 +549,9 @@ record_component_listener() {
   local component=$1 port=$2 listener
   listener="$(port_listener_pid "$port")"
   listener_pid_belongs_to_component "$component" "$listener" || return 1
+  if windows_dev_platform; then
+    windows_process record "$(windows_receipt "$component")" "$listener" >/dev/null || return 1
+  fi
   printf '%s\n' "$listener" > "$(listener_pid_file "$component")"
   printf '%s' "$listener"
 }
@@ -801,7 +828,7 @@ EOF
         stop_component desktop
         die "desktop exited during renderer bootstrap. Log: $(log_file desktop)"
       fi
-      printf '%s\n' "$listener" > "$(listener_pid_file desktop)"
+      record_component_listener desktop "$DESKTOP_RENDERER_PORT" >/dev/null || return 1
       ok "desktop ready (launcher $(component_pid desktop), renderer pid ${listener:-?}, backend :$BACKEND_PORT)"
       return 0
     fi
@@ -856,6 +883,12 @@ stop_component() {
     web) port="$FRONTEND_PORT" ;;
     desktop) port="$DESKTOP_RENDERER_PORT" ;;
   esac
+  if windows_dev_platform; then
+    windows_process stop "$(windows_receipt "$name")" "$port" || return 1
+    rm -f "$(pid_file "$name")" "$(listener_pid_file "$name")" "$(windows_receipt "$name")"
+    ok "$name stopped"
+    return
+  fi
   recorded_listener="$(cat "$(listener_pid_file "$name")" 2>/dev/null || true)"
   pid="$(component_pid "$name" || true)"
   if [ -n "$pid" ]; then

@@ -175,3 +175,16 @@ POSTGRES_PORT and the local DATABASE_URL port in the selected .env (or
 Windows PostgreSQL remains running; no database reset or production config
 change is required. R5 remains open pending successful app/daemon/provider
 smoke; this setup repair is not that evidence.
+
+### R5 Windows development process identity (#108)
+
+The Windows setup reached PostgreSQL migrations and API startup on port 18198,
+but the managed launcher rejected ownership and stopped the API (exit 143).
+Git Bash process IDs and Unix listener tools cannot establish native Windows
+process ownership. The isolated Windows helper records native launcher and
+listener PIDs together with creation times, validates parent ancestry, and
+terminates only verified process identities. Commit/start-time health checks
+remain mandatory. Native CI uses Node fixture processes, including an unrelated
+listener and a stale receipt; it does not exercise installed agents or accounts.
+R5 remains open until the user's app/daemon/provider smoke succeeds; R4 remains
+blocked on the existing producer evidence gate.
