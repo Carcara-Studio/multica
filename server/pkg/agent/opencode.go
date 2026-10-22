@@ -349,6 +349,14 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 		// Wait closes the process pipes, so a prompt write still blocked when
 		// OpenCode exited has returned by now. The writer sends exactly once.
 		writeErr := <-writeErrCh
+		if usesV2 && exitErr == nil && writeErr == nil && runCtx.Err() == nil && scanResult.completionMessageID != "" {
+			if verifyOpencodeV2Completion(runCtx, interruptConn, scanResult.sessionID, scanResult.completionMessageID, b.cfg.Logger) {
+				scanResult.status = "completed"
+				scanResult.errMsg = ""
+				scanResult.noTerminalSignal = false
+				scanResult.sawTerminalSignal = true
+			}
+		}
 
 		if runCtx.Err() == context.DeadlineExceeded {
 			scanResult.status = "timeout"
@@ -416,12 +424,13 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 
 // eventResult holds the accumulated state from processing the event stream.
 type eventResult struct {
-	status           string
-	errMsg           string
-	output           string
-	sessionID        string
-	usage            TokenUsage // accumulated token usage across all steps
-	noTerminalSignal bool       // guard fired: the stream ended without evidence the run actually finished
+	completionMessageID string // exact open-step assistant eligible for native V2 completion proof
+	status              string
+	errMsg              string
+	output              string
+	sessionID           string
+	usage               TokenUsage // accumulated token usage across all steps
+	noTerminalSignal    bool       // guard fired: the stream ended without evidence the run actually finished
 	// sawTerminalSignal is positive evidence that the run actually finished: a
 	// step_finish closed the last step with no continuation pending and with
 	// something to show for it. It is NOT the negation of noTerminalSignal — a
@@ -437,6 +446,8 @@ type eventResult struct {
 func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventResult {
 	var output strings.Builder
 	var sessionID string
+	var openMessageID string
+	mixedSessions := false
 	var usage TokenUsage
 	separateReasoning := opencodeSeparatesReasoning(b.cfg)
 	finalStatus := "completed"
@@ -494,6 +505,9 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		}
 
 		if event.SessionID != "" {
+			if sessionID != "" && sessionID != event.SessionID {
+				mixedSessions = true
+			}
 			sessionID = event.SessionID
 			// Publish it for the cancellation handler, which needs a session id
 			// to interrupt a 2.x run server-side. No-op when b has no tracker.
@@ -515,6 +529,7 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		case "error":
 			b.handleErrorEvent(event, ch, &finalStatus, &finalError)
 		case "step_start":
+			openMessageID = event.Part.MessageID
 			openStep = true
 			stepHasContinuationTool = false
 			awaitingContinuation = false
@@ -581,14 +596,19 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		}
 	}
 
+	completionMessageID := ""
+	if noTerminalSignal && openStep && scanner.Err() == nil && !mixedSessions {
+		completionMessageID = openMessageID
+	}
 	return eventResult{
-		status:            finalStatus,
-		errMsg:            finalError,
-		output:            output.String(),
-		sessionID:         sessionID,
-		usage:             usage,
-		noTerminalSignal:  noTerminalSignal,
-		sawTerminalSignal: sawStepFinish && !noTerminalSignal,
+		completionMessageID: completionMessageID,
+		status:              finalStatus,
+		errMsg:              finalError,
+		output:              output.String(),
+		sessionID:           sessionID,
+		usage:               usage,
+		noTerminalSignal:    noTerminalSignal,
+		sawTerminalSignal:   sawStepFinish && !noTerminalSignal,
 	}
 }
 

@@ -604,7 +604,7 @@ jobs:
         # payload arrives on stdin.
         # -v so a silent skip or a -run pattern that stops matching is visible
         # in the log instead of passing as "ok".
-        run: go test ./pkg/agent -v -run '^TestOpencodeExecuteOversizedPromptStartsOnWindows$' -count=1 -timeout=5m
+        run: go test ./pkg/agent -v -run '^(TestOpencodeExecuteOversizedPromptStartsOnWindows|TestOpencodeV2CompletionProof|TestOpencodeCompletionProofRejectsUnprovenState|TestOpencodeCompletionProofBufferBound)$' -count=1 -timeout=5m
 
       - name: Test Windows agent process-tree ownership
         working-directory: server

@@ -50,6 +50,10 @@ func runFakeCodeArtsModelHelper() {
 // be invoked with OpenCode's own argv (`run --format json ...`) instead of
 // -test.* flags.
 func runFakeOpencodeStdinHelper() {
+	if os.Getenv("MULTICA_OPENCODE_COMPLETION_FIXTURE") == "1" {
+		runFakeOpencodeCompletionHelper()
+		return
+	}
 	argv := strings.Join(os.Args[1:], "\n")
 	if err := os.WriteFile(os.Getenv(opencodeStdinHelperArgvFile), []byte(argv), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "helper: write argv: %v\n", err)

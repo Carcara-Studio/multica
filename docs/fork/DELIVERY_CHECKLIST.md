@@ -31,6 +31,14 @@ completion indefinitely.
 
 ## Scope controls
 
+R5 follow-up #116 / ADR-036 records the post-#115 identity test: each monitor's
+visible marker and status had the correct author, but three task attempts per
+monitor failed with an open step at EOF. Native OpenCode 2 completion proof now
+consults only a bounded sanitized session export after clean process exit and
+requires the current assistant plus native successful idle. Missing proof keeps
+the original failure. Fake runtime tests are not a real Windows/account pass;
+Codex UAC, the old branched run and full R5 completion remain unresolved.
+
 R5 real Windows evidence from 2026-10-22 is tracked in #114. Basic application,
 model-selected execution and single-child delegation/manager resumption passed
 with maintainer review. Branched mixed-harness completion did not pass: OpenCode
