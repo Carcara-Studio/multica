@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 function powershell(source) {
   return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
-    Buffer.from(`$ErrorActionPreference='Stop'; ${source}`, 'utf16le').toString('base64')],
+    Buffer.from(`$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; ${source}`, 'utf16le').toString('base64')],
   { encoding: 'utf8', timeout: 30000, windowsHide: true }).trim();
 }
 
@@ -109,7 +109,8 @@ export async function run([command, file, ...args]) {
   }
   if (command === 'stop') {
     const state = snapshot(Number(args[0] || 0));
-    const targets = state.processes.filter(p => owns(receipt, p.pid, state.processes));
+    const targets = state.processes.filter(p => owns(receipt, p.pid, state.processes))
+      .sort((a, b) => Number(b.pid === receipt.root.pid) - Number(a.pid === receipt.root.pid));
     // Persist verified identities before termination, so an interrupted stop can
     // safely finish even after the launcher and its PPID chain have disappeared.
     receipt.listeners = targets;
@@ -117,15 +118,30 @@ export async function run([command, file, ...args]) {
     if (targets.length) {
       const encoded = Buffer.from(JSON.stringify(targets)).toString('base64');
       powershell(`
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class DevProcess {
+  [DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+  [DllImport("kernel32.dll", SetLastError=true)] public static extern bool GetProcessTimes(IntPtr handle, out long created, out long exited, out long kernel, out long user);
+  [DllImport("kernel32.dll", SetLastError=true)] public static extern bool TerminateProcess(IntPtr handle, uint code);
+  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
+}
+'@
         $targets = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')) | ConvertFrom-Json;
         foreach ($target in $targets) {
-          $p = $null;
+          # Query and terminate through one pinned native handle; never reopen a PID.
+          $handle = [DevProcess]::OpenProcess(0x101001, $false, [int]$target.pid);
+          if ($handle -eq [IntPtr]::Zero) { continue };
           try {
-            $p = [Diagnostics.Process]::GetProcessById([int]$target.pid);
-            $null = $p.Handle;
-            $ticks = $p.StartTime.ToUniversalTime().Ticks;
-            if ([string]($ticks - ($ticks % 10)) -eq $target.birth) { $p.Kill() }
-          } catch [ArgumentException] { } finally { if ($null -ne $p) { $p.Dispose() } }
+            [long]$created=0; [long]$exited=0; [long]$kernel=0; [long]$user=0;
+            if ([DevProcess]::GetProcessTimes($handle, [ref]$created, [ref]$exited, [ref]$kernel, [ref]$user)) {
+              $ticks = [DateTime]::FromFileTimeUtc($created).Ticks;
+              if ([string]($ticks - ($ticks % 10)) -eq $target.birth) {
+                $null = [DevProcess]::TerminateProcess($handle, 143);
+              }
+            }
+          } finally { $null = [DevProcess]::CloseHandle($handle) }
         }
       `);
     }

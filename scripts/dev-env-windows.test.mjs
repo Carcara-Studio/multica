@@ -61,10 +61,11 @@ test('Git Bash launches, identifies and stops native child listeners without tou
     foreign.listen(0, '127.0.0.1');
     await once(foreign, 'listening');
     let port;
+    let valid;
     try {
       // Exercise the actual Git Bash entry point, including MSYS path conversion
       // and desktop's env-assignment launch prefix. No installed agent CLI runs.
-      const bash = spawnSync('bash.exe', ['-lc', `
+      const bash = spawnSync(join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'), ['-lc', `
         source scripts/dev-env.sh
         STATE_DIR="$FIXTURE_DIR"; LOG_DIR="$FIXTURE_DIR"
         launch_detached api env FIXTURE_MARKER=yes node "$FIXTURE_FILE" "$FIXTURE_PORT"
@@ -77,7 +78,7 @@ test('Git Bash launches, identifies and stops native child listeners without tou
       assert.equal(await run(['owns', file, String(data.pid)]), data.pid);
       await run(['record', file, String(data.pid)]);
       await assert.rejects(run(['owns', file, String(process.pid)]), /not owned/);
-      const valid = JSON.parse(readFileSync(file, 'utf8'));
+      valid = JSON.parse(readFileSync(file, 'utf8'));
       writeFileSync(file, JSON.stringify({ root: { ...valid.root, birth: '1' }, listeners: [] }));
       await assert.rejects(run(['owns', file, String(data.pid)]), /not owned/);
       await run(['stop', file, String(port)]);
@@ -88,7 +89,10 @@ test('Git Bash launches, identifies and stops native child listeners without tou
       assert.equal(await run(['listener', String(foreign.address().port)]), process.pid);
       assert.equal(await (await fetch(`http://127.0.0.1:${foreign.address().port}`)).text(), 'foreign');
     } finally {
-      try { await run(['stop', file, String(port || 0)]); } finally {
+      try {
+        if (valid) writeFileSync(file, JSON.stringify(valid));
+        await run(['stop', file, String(port || 0)]);
+      } finally {
         foreign.closeAllConnections();
         await new Promise(resolve => foreign.close(resolve));
         rmSync(dir, { recursive: true, force: true });
