@@ -201,3 +201,17 @@ uses the pinned Turbo, checks unrelated variables stay filtered, and builds a
 tiny native Go binary with default and explicit cache directories (including
 paths with spaces) in Windows CI. R5 real app/account/provider validation and
 R4's producer evidence gate remain open.
+
+### R5 Windows auxiliary console visibility (#112)
+
+The user reached Environment ready on 493a156bf but observed two persistent
+black terminal windows. The Windows launch helper's Node detached flag does not
+provide hidden descendant-console semantics. Native launch now gives each
+managed tree its own hidden console, with only NUL/log handles inherited and
+native creation identity recorded before returning. PID/birth ownership and
+verified stop remain unchanged; the installed Multica instance is outside this
+managed tree. Windows fixture checks cover hidden root/child consoles, lifetime
+after the invoking shell exits, shared stdout/stderr logging and paths with
+spaces, alongside existing stale-identity/unrelated-listener protections.
+Actual Desktop window visibility and the user's console observation still need
+local confirmation; R5 and R4's producer evidence gate remain open.
