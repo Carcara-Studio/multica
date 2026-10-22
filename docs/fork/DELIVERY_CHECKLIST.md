@@ -161,3 +161,17 @@ not squash. [UPSTREAM_SYNC_20261021.md](./UPSTREAM_SYNC_20261021.md) records the
 conflict resolution, compatibility boundaries and verification. This advances
 R5's upstream criterion only; no real Windows/account/provider smoke is claimed.
 R4 remains blocked by CODEX_CREDENTIAL_BOUNDARY.md, not solved by adding Qoder.
+
+
+### R5 Windows database port collision (#106)
+
+The maintainer's Windows setup has a native PostgreSQL process listening on
+5432. Docker could not publish the managed development database there. The
+local scripts already support POSTGRES_PORT and DATABASE_URL; the development
+Compose mapping now honors POSTGRES_PORT (default 5432) on loopback while the
+container stays on 5432. Choose an unused host port such as 15432 and set both
+POSTGRES_PORT and the local DATABASE_URL port in the selected .env (or
+.env.worktree). Keep the managed database name, credentials and volume. Existing
+Windows PostgreSQL remains running; no database reset or production config
+change is required. R5 remains open pending successful app/daemon/provider
+smoke; this setup repair is not that evidence.
