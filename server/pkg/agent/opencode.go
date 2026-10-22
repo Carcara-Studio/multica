@@ -138,7 +138,20 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	if opts.ResumeSessionID != "" {
 		args = append(args, "--session", opts.ResumeSessionID)
 	}
-	args = append(args, filterCustomArgs(opts.CustomArgs, opencodeBlockedArgs, b.cfg.Logger)...)
+	blockedArgs := opencodeBlockedArgs
+	if usesV2 && b.cfg.Env["MULTICA_TOKEN"] != "" {
+		// A resident 2.x service keeps the environment it started with. Task
+		// credentials and identity must instead reach a private server for this
+		// invocation, including when another agent already started the service.
+		blockedArgs = make(map[string]blockedArgMode, len(opencodeBlockedArgs)+2)
+		for flag, mode := range opencodeBlockedArgs {
+			blockedArgs[flag] = mode
+		}
+		blockedArgs["--server"] = blockedWithValue
+		blockedArgs["--standalone"] = blockedStandalone
+		args = append(args, "--standalone")
+	}
+	args = append(args, filterCustomArgs(opts.CustomArgs, blockedArgs, b.cfg.Logger)...)
 	// The task prompt is delivered on stdin, never argv — see the StdinPipe
 	// wiring below. `opencode run` merges its variadic [message..] positional
 	// with whatever is piped in, so an invocation that passes no positional

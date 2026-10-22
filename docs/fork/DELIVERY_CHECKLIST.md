@@ -31,6 +31,35 @@ completion indefinitely.
 
 ## Scope controls
 
+R5 real Windows evidence from 2026-10-22 is tracked in #114. Basic application,
+model-selected execution and single-child delegation/manager resumption passed
+with maintainer review. Branched mixed-harness completion did not pass: OpenCode
+network/unknown failures, repeated mathematics leaf runs after In Review,
+premature tutor review, a changed-intent replay possibility and a Portuguese
+comment/status attributed to the mathematics monitor remain under investigation.
+Supplied mathematics logs do not establish cross-issue writes. Sixteen Codex
+sandbox-setup UAC prompts were reported; no precise run-to-prompt mapping or
+sandbox fix is claimed. R4 remains blocked and R5 remains partial.
+
+The #114 runtime fix isolates authenticated built-in OpenCode 2 task launches
+using its native `run --standalone`: a resident server retains its startup
+environment, so CLI-only task credentials cannot safely be delivered through it.
+Conflicting custom server/standalone flags are filtered for those task launches.
+OpenCode 1, unknown versions, custom runtime profiles and the existing MCP
+refusal retain their contracts. Existing process-tree cancellation owns the
+private server. This corrects environment delivery; it does not prove the cause
+of the DEV-10 author or suppress native provider-network retries after partial
+side effects. Request-hash replay protection and Windows sandbox policy are
+unchanged. Official contract references:
+https://opencode.ai/v2/docs/cli/commands and
+https://opencode.ai/v2/docs/network/ .
+
+An installed-agent-free fixture models resident environment retention and checks
+distinct task identities and custom-server rejection. This slice changes one
+runtime implementation and its existing test file, with no API/schema/migration,
+queue or failover addition; it stays within ADR-014/021 and R5. A new real Windows
+run is still needed after delivery; fake fixtures cannot close that criterion.
+
 1. Every new work Issue and PR must name its R1-R5 item and the specific
    completion criterion it advances or defect it resolves. Before coding, check
    the current implementation, accepted ADRs and existing evidence. Reuse the
