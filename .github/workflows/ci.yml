@@ -542,6 +542,17 @@ jobs:
           check-latest: true
           cache-dependency-path: server/go.sum
 
+      - name: Setup pnpm for strict Turbo environment regression
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Verify native Go build paths through Turbo strict mode
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/multica-turbo" --no-audit --no-fund --package-lock=false turbo@2.9.5
+          MULTICA_TEST_TURBO_BINARY="$RUNNER_TEMP/multica-turbo/node_modules/turbo/bin/turbo" node --test scripts/turbo-go-env.test.mjs
+
       - name: Test Windows execution-environment isolation
         working-directory: server
         # Keep this job scoped to the runtime regression it exists to prove.

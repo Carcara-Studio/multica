@@ -188,3 +188,16 @@ remain mandatory. Native CI uses Node fixture processes, including an unrelated
 listener and a stale receipt; it does not exercise installed agents or accounts.
 R5 remains open until the user's app/daemon/provider smoke succeeds; R4 remains
 blocked on the existing producer evidence gate.
+
+### R5 Desktop Go build environment (#110)
+
+After #108 / PR #109 the Windows API passes ownership/commit/start-time health
+validation and the database is reachable and migrated. Desktop reaches CLI
+bundling, where Turbo strict filtering removes native Go cache/profile variables
+and Go reports that neither GOCACHE nor LocalAppData is defined. Turbo's explicit
+pass-through list preserves native profile, cache and temporary directories
+without hashing machine-specific paths or disabling strict filtering. A fixture
+uses the pinned Turbo, checks unrelated variables stay filtered, and builds a
+tiny native Go binary with default and explicit cache directories (including
+paths with spaces) in Windows CI. R5 real app/account/provider validation and
+R4's producer evidence gate remain open.

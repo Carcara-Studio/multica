@@ -45,6 +45,8 @@ for (const [name, files, selected] of [
   ["shared quality action", [".github/actions/frontend-quality/action.yml"], ["frontend", "quality"]],
   ["new bitmap", ["apps/web/public/hero.png"], ["frontend", "quality", "images"]],
   ["mixed docs and migration", ["apps/docs/content/guide.mdx", "server/migrations/999_example.up.sql"], ["quality", "backend", "sqlc"]],
+  ["Turbo native Go environment", ["turbo.json"], ["frontend", "runtime", "quality"]],
+  ["Turbo native Go regression", ["scripts/turbo-go-env.test.mjs"], ["frontend", "runtime", "quality"]],
   ["CI configuration", [".github/ci-paths.json"], Object.keys(filters)],
 ]) {
   test(`PR and main select only affected scopes: ${name}`, () => {

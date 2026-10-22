@@ -20,6 +20,20 @@
     "DESKTOP_RENDERER_PORT",
     "DESKTOP_APP_SUFFIX"
   ],
+  // Desktop bundles the Go CLI inside Turbo's strict environment. Native user
+  // directories and cache/temp overrides select storage, not build inputs.
+  "globalPassThroughEnv": [
+    "LOCALAPPDATA",
+    "APPDATA",
+    "USERPROFILE",
+    "GOCACHE",
+    "GOMODCACHE",
+    "GOPATH",
+    "GOTMPDIR",
+    "TMPDIR",
+    "TMP",
+    "TEMP"
+  ],
   "tasks": {
     // `fumadocs-mdx` regenerates `.source/` by removing the directory and
     // writing it again, so two of them in the same package at once is a race:
