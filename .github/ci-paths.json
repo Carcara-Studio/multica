@@ -14,7 +14,8 @@
     ".github/workflows/ci.yml",
     ".github/ci-paths.json",
     "scripts/ci-scope.mjs",
-    "scripts/ci-scope.test.mjs"
+    "scripts/ci-scope.test.mjs",
+    "scripts/turbo-go-env.test.mjs"
   ],
   "backend": [
     "server/**",
@@ -57,7 +58,9 @@
     "scripts/ci-scope.test.mjs",
     "scripts/dev-env.sh",
     "scripts/dev-env-windows.mjs",
-    "scripts/dev-env-windows.test.mjs"
+    "scripts/dev-env-windows.test.mjs",
+    "turbo.json",
+    "scripts/turbo-go-env.test.mjs"
   ],
   "quality": [
     ".github/actions/frontend-quality/**",
