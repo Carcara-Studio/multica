@@ -543,7 +543,7 @@ jobs:
           cache-dependency-path: server/go.sum
 
       - name: Setup pnpm for strict Turbo environment regression
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v4
         with:
           version: 10.28.2
 
