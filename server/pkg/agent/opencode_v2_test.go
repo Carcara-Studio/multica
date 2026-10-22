@@ -88,6 +88,71 @@ func TestOpencodeModelArg(t *testing.T) {
 
 const testMCPConfig = `{"mcpServers":{"probe":{"command":"node","args":["probe.js"]}}}`
 
+// A fake resident service retains its first caller's environment. Task runs
+// must start private services so later agents cannot inherit that identity.
+func TestOpencodeV2TaskIdentityUsesPrivateServer(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	fakePath := filepath.Join(root, "opencode")
+	script := `#!/bin/sh
+cat > /dev/null
+private=no
+for arg in "$@"; do
+  case "$arg" in
+    --standalone) private=yes ;;
+    --server|--server=*) exit 9 ;;
+  esac
+done
+identity="$MULTICA_AGENT_ID:$MULTICA_TASK_ID:$MULTICA_TOKEN"
+if [ "$private" = no ]; then
+  if [ ! -f "$SERVICE_STATE" ]; then printf '%s' "$identity" > "$SERVICE_STATE"; fi
+  identity=$(cat "$SERVICE_STATE")
+fi
+printf '%s' "$identity" > "$IDENTITY_CAPTURE"
+printf '{"type":"step_start","sessionID":"ses","part":{}}\n'
+printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
+`
+	writeTestExecutable(t, fakePath, []byte(script))
+	for _, marker := range []string{"math", "portuguese"} {
+		capture := filepath.Join(root, marker+".txt")
+		backend, err := New("opencode", Config{
+			ExecutablePath: fakePath, CLIVersion: "opencode v2.0.28", BuiltinRuntime: true,
+			Logger: slog.Default(), Env: map[string]string{
+				"MULTICA_AGENT_ID": marker, "MULTICA_TASK_ID": "task-" + marker,
+				"MULTICA_TOKEN": "mat_fake_" + marker,
+				"SERVICE_STATE": filepath.Join(root, "resident.txt"), "IDENTITY_CAPTURE": capture,
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		session, err := backend.Execute(ctx, "fixture", ExecOptions{
+			Cwd: t.TempDir(), Timeout: 5 * time.Second,
+			CustomArgs: []string{"--server", "http://untrusted.invalid", "--server=http://other.invalid", "--standalone"},
+		})
+		if err != nil {
+			cancel()
+			t.Fatal(err)
+		}
+		for range session.Messages {
+		}
+		<-session.Result
+		cancel()
+		got, err := os.ReadFile(capture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := marker + ":task-" + marker + ":mat_fake_" + marker
+		if string(got) != want {
+			t.Fatalf("task identity = %q, want %q", got, want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "resident.txt")); !os.IsNotExist(err) {
+		t.Fatalf("task invocation used the shared resident service: %v", err)
+	}
+}
+
 // TestOpencodeCheckMCPSupport pins the refusal. 2.x has no channel that can
 // carry MCP credentials without putting them where the agent can commit them,
 // so a configured run fails instead of quietly starting without its servers.
