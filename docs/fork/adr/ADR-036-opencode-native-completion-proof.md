@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-22
-- Scope: DELIVERY_CHECKLIST R5; #116, follow-up to #114
+- Scope: DELIVERY_CHECKLIST R5; #116/#118, follow-up to #114
 - Governing decisions: ADR-012/014/021; native task lifecycle remains unchanged
 
 ## Evidence
@@ -24,11 +24,30 @@ Native session export is read-only. Its transfer schema contains session info
 and ordered persisted messages. Assistant completion and final `idle` outcome
 provide stronger completion evidence than displayed text or Issue status.
 
+The later DEV-13 log reports a closed step requiring continuation at EOF.
+That shape previously never consulted this proof. It is eligible for the same
+verification, not an exemption from its predicate. The local raw event trace
+and native transcript are unavailable; model availability is not established
+as the cause.
+
+V2 can reconcile a new assistant's text after the earlier tool step without a
+new step_start. Select the latest assistant ID actually observed on text/tool/
+step events, rather than retaining the earlier step-start ID. Observing an ID
+only selects the record to verify; it supplies no completion evidence itself.
+
+Compatibility review on 2026-10-23 found upstream `76dfd4a58` (#9463), which
+accepts clean built-in V2 process exit for both missing-step shapes while
+retaining error/exit/void-step checks. That differs from this ADR's exact
+persisted-message requirement. #118 only broadens read-only query eligibility;
+it preserves that stronger predicate instead of silently replacing the accepted
+completion contract. The reviewed upstream HEAD is
+`dbdbb299164347586e2650bb67684a490726a798`; it is not an integrated baseline.
+
 ## Decision
 
 Only a built-in OpenCode 2 run that exits zero, finishes its prompt write,
 has no cancellation, scanner or explicit runtime error, and leaves an open
-step with a known assistant message ID may consult native
+step or unresolved continuation gap with a known assistant message ID may consult native
 `session export --sanitize <session-id>`. Use the same executable, environment,
 directory and native private/server selection. Bound it by the original run
 context plus ten seconds and eight MiB; use owned process-tree cleanup. Discard
@@ -47,7 +66,9 @@ assistant `finish: stop`, completed timestamps in order, no assistant/idle
 error, no unfinished tools, and a preceding user prompt in that turn. Reject
 stale/mismatched IDs, later prompts, missing/failed/interrupted idle, malformed,
 oversized, unavailable or timed-out evidence. Without proof the existing
-failure remains. Closed steps, explicit errors, cancellation, failed process
+failure remains. A persisted assistant still requiring tool continuation cannot
+pass, even if it has produced text or changed an Issue. Already terminal steps,
+explicit errors, cancellation, failed process
 exit, old/unknown versions and custom runtime contracts keep existing behavior.
 
 This is completion verification, not inference, task retry, provider failover
