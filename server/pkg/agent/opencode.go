@@ -424,7 +424,7 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 
 // eventResult holds the accumulated state from processing the event stream.
 type eventResult struct {
-	completionMessageID string // exact open-step assistant eligible for native V2 completion proof
+	completionMessageID string // exact current assistant eligible for native V2 completion proof
 	status              string
 	errMsg              string
 	output              string
@@ -446,7 +446,7 @@ type eventResult struct {
 func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventResult {
 	var output strings.Builder
 	var sessionID string
-	var openMessageID string
+	var currentAssistantID string
 	mixedSessions := false
 	var usage TokenUsage
 	separateReasoning := opencodeSeparatesReasoning(b.cfg)
@@ -516,11 +516,19 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 
 		switch event.Type {
 		case "text":
+			// V2 reconciliation may emit the final assistant without its
+			// step_start. Its ID selects proof; text itself never proves success.
+			if event.Part.MessageID != "" {
+				currentAssistantID = event.Part.MessageID
+			}
 			b.handleTextEvent(event, ch, &output)
 			if event.Part.Text != "" {
 				stepProducedOutput = true
 			}
 		case "tool_use":
+			if event.Part.MessageID != "" {
+				currentAssistantID = event.Part.MessageID
+			}
 			b.handleToolUseEvent(event, ch)
 			stepProducedOutput = true
 			if event.Part.Metadata == nil || !event.Part.Metadata.ProviderExecuted {
@@ -529,13 +537,16 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 		case "error":
 			b.handleErrorEvent(event, ch, &finalStatus, &finalError)
 		case "step_start":
-			openMessageID = event.Part.MessageID
+			currentAssistantID = event.Part.MessageID
 			openStep = true
 			stepHasContinuationTool = false
 			awaitingContinuation = false
 			stepProducedOutput = false
 			trySend(ch, Message{Type: MessageStatus, Status: "running"})
 		case "step_finish":
+			if event.Part.MessageID != "" {
+				currentAssistantID = event.Part.MessageID
+			}
 			openStep = false
 			sawStepFinish = true
 			awaitingContinuation = event.Part.Reason == "tool-calls" ||
@@ -597,8 +608,8 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 	}
 
 	completionMessageID := ""
-	if noTerminalSignal && openStep && scanner.Err() == nil && !mixedSessions {
-		completionMessageID = openMessageID
+	if noTerminalSignal && (openStep || awaitingContinuation) && scanner.Err() == nil && !mixedSessions {
+		completionMessageID = currentAssistantID
 	}
 	return eventResult{
 		completionMessageID: completionMessageID,
