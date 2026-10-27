@@ -85,14 +85,28 @@ Do not copy setup markers, `.sandbox-secrets`, or whole homes; disable UAC or
 sandbox; or spoof package identity to avoid provisioning. This mitigation does
 not repair the legacy standalone/service admission contract.
 
-## Remaining work and non-goals
+## Final application handoff and scope of acceptance
 
-1. Carry the verified explicit MXC setting into the intended local operational
-   agent configuration, preserving unrelated settings and rollback. Current
-   validation is limited to a synthetic agent, not a machine-wide rollout.
-2. Complete one final application handoff using that intended configuration and
-   record the artifact/commit in use. The earlier desktop-open result and later
-   CLI smoke are distinct evidence; do not claim an all-in-one final desktop run.
+After maintainer login, the development desktop on renderer port 5292 was
+verified against local API 18198. The user initially landed in the older
+Multica Dev workspace; switching through the UI to Dev exposed the recent cases.
+DEV-13 showed both child issues (2/2), the initial waiting reply, the final
+MXC_MIXED_OK reply, In Review status and a completed run triggered by wakeup.
+The R5 Codex preflight profile showed Online/Idle, successful DEV-12/DEV-15 work,
+and Custom Args/command preview `codex app-server -c windows.sandbox="mxc"`.
+No settings were edited or tasks dispatched during this visual/read-only check.
+
+The desktop rebuilt its bundled CLI at `dea9d117f`, a documentation-only
+successor to the tested runtime commit. Its managed daemon was healthy at that
+commit with zero active tasks. The manual daemon was stopped before launching
+the desktop; the global installed application was left untouched.
+
+This completes the bounded R5 validation and application handoff for this local
+Dev workspace and accepted upstream UI baseline. The sole Codex agent there
+already has the verified setting. This does not establish machine-wide rollout,
+readiness of every historical workspace, another PC, or R4 activation. The
+executions occurred through the CLI before the final desktop review; do not
+claim that new inference was launched from the final desktop session.
 
 Assess additional behavior only if the intended work needs it. Official MXC
 constraints include host-loopback access, managed-network local-binding

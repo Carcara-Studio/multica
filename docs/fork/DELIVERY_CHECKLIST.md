@@ -9,7 +9,7 @@ independently authorize additional delivery work.
 
 ## Fixed scope and completion criteria
 
-R1 is delivered by #98 / PR #99, R2 by #100 / PR #101 and R3 by #102 / PR #103; R4-R5 remain open. A helper, audit, mock test
+R1 is delivered by #98 / PR #99, R2 by #100 / PR #101 and R3 by #102 / PR #103; R4 remains blocked; R5 passed its bounded Windows/account and accepted upstream-baseline criteria on 2026-10-27. A helper, audit, mock test
 or foundation PR alone is not completion of an item. Maintain evidence here as
 work lands; do not replace these identifiers with new phases.
 
@@ -19,7 +19,7 @@ work lands; do not replace these identifiers with new phases.
 | R2 | Expose escalation | Complete: #100 / PR #101, ADR-034; MAT-only API/CLI, bounded briefing and shared web/desktop decision management. Native PG17 and changed client regression gates required before merge | Provide the API, CLI, bounded Agent instructions and management UI for the R1 operation. Validate the current task credential, actor/Issue binding and permissions; reject unauthorized/unavailable targets. Show source, destination/root boundary, reason/state and repair needs. Preserve successful existing contracts and test the changed client surfaces. The relation helper alone must not be advertised as executable escalation. |
 | R3 | Recover committed operations whose execution was not dispatched | Complete: #102 / PR #103, ADR-035; atomic native task/receipt registration, native restart/concurrency/rollback and migration coverage passed PostgreSQL 17/race CI 39658187665 | A server failure between durable registration and native enqueue can be detected and recovered without duplicate work or blind replay of ambiguous partial execution. Define and prove the recovery/reconciliation rule against native execution fences, including restart/concurrency tests. Cover the delivered delegation boundary and applicable escalation delivery; do not create a second general executor. |
 | R4 | Complete automatic model fallback and recovery | Blocked at activation: producer credential/evidence boundary remains unresolved; control-plane foundations exist | Obtain trustworthy request-bound evidence for the effective execution credential/target, integrate all required dispatch/claim/retry writers, switch only on accepted quota evidence, route subsequent work to fallback, and test the primary every 30 minutes with isolated inference. Recover safely when the primary is available. Prove concurrency/crash/partial-execution behavior and the accepted provider compatibility policy. Automatic fallback/probes stay disabled until the evidence and execution gates actually pass; control-plane tests cannot close this item. |
-| R5 | Real-environment validation and upstream compatibility | Partial: upstream c9b6de856 integrated via #104 / PR #105; real Windows single/mixed account smoke passed on 2026-10-27; operational MXC adoption/final application pass remain bounded follow-up (#114) | Run the bounded installed CLI/daemon/application smoke with the maintainer's real Windows/account environment when authorized, record exact evidence and limitations, and resolve regressions in R1-R4. Incorporate the reviewed upstream UI advance through the normal isolated synchronization workflow (prior integrated baseline 2b645691387e1535cc63d6ebf2ba4e996387c8b2; sync target c9b6de8567d7bb57bf9a2a3220207cf2b3e5a038 includes the reviewed UI advance e0e9efc5f1d6ff2a88ad2d7844d4d76f2519985d). Revalidate upstream for affected changes and verify the final integrated behavior. No real-account smoke is claimed from fake HTTP/agent or server tests. |
+| R5 | Real-environment validation and upstream compatibility | Complete for the validated local Windows environment: accepted upstream c9b6de856 integration, real single/mixed account execution, scoped MXC and final desktop verification (#114, 2026-10-27). R4 activation and broader rollout are separate | Run the bounded installed CLI/daemon/application smoke with the maintainer's real Windows/account environment when authorized, record exact evidence and limitations, and resolve regressions in R1-R4. Incorporate the reviewed upstream UI advance through the normal isolated synchronization workflow (prior integrated baseline 2b645691387e1535cc63d6ebf2ba4e996387c8b2; sync target c9b6de8567d7bb57bf9a2a3220207cf2b3e5a038 includes the reviewed UI advance e0e9efc5f1d6ff2a88ad2d7844d4d76f2519985d). Revalidate upstream for affected changes and verify the final integrated behavior. No real-account smoke is claimed from fake HTTP/agent or server tests. |
 
 Recommended order: R1, then R2, then R3. R4's independent necessary work may
 proceed when supported by evidence, but its external blocker is not permission
@@ -40,8 +40,13 @@ passed. Explicit MXC avoided legacy provisioning in fresh Codex task homes on
 the tested machine. This is scoped test-agent evidence, not global deployment,
 a general fix for legacy elevated provisioning, or R4 activation.
 
-R5 stays partial while the documented operational adoption and final integrated
-application handoff are unfinished. The already integrated upstream UI baseline
+After maintainer login, the updated development desktop was verified on the Dev
+workspace: the mixed parent showed accepted children, native wakeup continuation
+and In Review delivery; the Codex agent displayed its explicit MXC custom args.
+The desktop daemon ran documentation-only successor `dea9d117f` with zero active
+tasks. This completes the scoped application handoff; the sole Codex agent in
+that workspace already has MXC. It does not roll out settings to other workspaces
+or the installed global application. The already integrated upstream UI baseline
 is accepted; following every later upstream commit, repeating identical smoke
 tests, and testing another device are not new conditions for completion.
 
