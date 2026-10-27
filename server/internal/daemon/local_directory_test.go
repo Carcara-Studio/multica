@@ -406,7 +406,7 @@ func TestIsDriveRoot(t *testing.T) {
 
 func TestLocalPathLockerSerializes(t *testing.T) {
 	locker := NewLocalPathLocker()
-	const path = "/some/path"
+	path := t.TempDir()
 
 	rel1, err := locker.Acquire(context.Background(), path, "task-1", nil)
 	if err != nil {
@@ -494,7 +494,7 @@ func TestLocalPathLockerCtxCancel(t *testing.T) {
 	t.Parallel()
 
 	locker := NewLocalPathLocker()
-	const path = "/some/path"
+	path := t.TempDir()
 
 	rel1, err := locker.Acquire(context.Background(), path, "task-1", nil)
 	if err != nil {
@@ -516,8 +516,9 @@ func TestLocalPathLockerCtxCancel(t *testing.T) {
 
 func TestLocalPathLockerDistinctPathsParallel(t *testing.T) {
 	locker := NewLocalPathLocker()
+	base := t.TempDir()
 
-	rel1, err := locker.Acquire(context.Background(), "/a", "task-1", nil)
+	rel1, err := locker.Acquire(context.Background(), filepath.Join(base, "a"), "task-1", nil)
 	if err != nil {
 		t.Fatalf("acquire 1: %v", err)
 	}
@@ -529,7 +530,7 @@ func TestLocalPathLockerDistinctPathsParallel(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		rel2, err := locker.Acquire(context.Background(), "/b", "task-2", nil)
+		rel2, err := locker.Acquire(context.Background(), filepath.Join(base, "b"), "task-2", nil)
 		if err != nil {
 			t.Errorf("acquire 2: %v", err)
 			return
