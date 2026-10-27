@@ -52,6 +52,9 @@ func runFakeOpencodeCompletionHelper() {
 		if os.Getenv("COMPLETION_MODE") == "export-fails" {
 			os.Exit(1)
 		}
+		if os.Getenv("COMPLETION_MODE") == "continuation-no-proof" {
+			os.Exit(1)
+		}
 		if os.Getenv("COMPLETION_MODE") == "export-stalls" {
 			time.Sleep(time.Minute)
 			return
@@ -60,17 +63,45 @@ func runFakeOpencodeCompletionHelper() {
 			fmt.Print(strings.Repeat("x", opencodeProofMaxBytes+1))
 			return
 		}
-		fmt.Print(os.Getenv("COMPLETION_PROOF"))
+		proof := os.Getenv("COMPLETION_PROOF")
+		switch os.Getenv("COMPLETION_MODE") {
+		case "continuation-pending":
+			proof = strings.Replace(proof, `"finish":"stop"`, `"finish":"tool-calls"`, 1)
+		case "continuation-failed":
+			proof = strings.Replace(proof, `"outcome":"succeeded"`, `"outcome":"failed"`, 1)
+		case "continuation-other-assistant":
+			proof = strings.Replace(proof, "msg_current", "msg_other", 1)
+		case "continuation-new-assistant-stale-proof":
+			proof = strings.Replace(proof, "msg_current", "msg_previous", 1)
+		}
+		fmt.Print(proof)
 		return
 	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
+	if strings.HasPrefix(os.Getenv("COMPLETION_MODE"), "continuation-new-assistant") {
+		// V2 may reconcile the final assistant after the previous tool step,
+		// without delivering that assistant's step_start or step_finish.
+		fmt.Println(`{"type":"step_start","sessionID":"ses_current","part":{"messageID":"msg_previous"}}`)
+		fmt.Println(`{"type":"tool_use","sessionID":"ses_current","part":{"messageID":"msg_previous","tool":"shell","state":{"status":"completed","input":{},"output":"fixture"}}}`)
+		fmt.Println(`{"type":"step_finish","sessionID":"ses_current","part":{"messageID":"msg_previous","reason":"tool-calls"}}`)
+		fmt.Println(`{"type":"text","sessionID":"ses_current","part":{"messageID":"msg_current","text":"answer"}}`)
+		return
+	}
 	if os.Getenv("COMPLETION_MODE") == "missing-id" {
 		fmt.Println(`{"type":"step_start","sessionID":"ses_current","part":{}}`)
+		fmt.Println(`{"type":"text","sessionID":"ses_current","part":{"text":"answer"}}`)
 	} else {
 		fmt.Println(`{"type":"step_start","sessionID":"ses_current","part":{"messageID":"msg_current"}}`)
+		fmt.Println(`{"type":"text","sessionID":"ses_current","part":{"messageID":"msg_current","text":"answer"}}`)
 	}
-	fmt.Println(`{"type":"text","sessionID":"ses_current","part":{"messageID":"msg_current","text":"answer"}}`)
 	switch os.Getenv("COMPLETION_MODE") {
+	case "continuation-stop", "continuation-tool-calls", "continuation-pending", "continuation-failed", "continuation-no-proof", "continuation-other-assistant":
+		fmt.Println(`{"type":"tool_use","sessionID":"ses_current","part":{"messageID":"msg_current","tool":"shell","state":{"status":"completed","input":{},"output":"fixture"}}}`)
+		reason := "tool-calls"
+		if os.Getenv("COMPLETION_MODE") == "continuation-stop" {
+			reason = "stop"
+		}
+		fmt.Printf("{\"type\":\"step_finish\",\"sessionID\":\"ses_current\",\"part\":{\"messageID\":\"msg_current\",\"reason\":%q}}\n", reason)
 	case "mixed-session":
 		fmt.Println(`{"type":"text","sessionID":"ses_other","part":{"messageID":"msg_other","text":"other"}}`)
 	case "exit-fails":
@@ -91,6 +122,15 @@ func TestOpencodeV2CompletionProof(t *testing.T) {
 		query               bool
 	}{
 		{"missing-finish", "2.0.28", "completed", true},
+		{"continuation-stop", "2.0.28", "completed", true},
+		{"continuation-tool-calls", "2.0.28", "completed", true},
+		{"continuation-new-assistant", "2.0.28", "completed", true},
+		{"continuation-new-assistant-stale-proof", "2.0.28", "failed", true},
+		{"continuation-pending", "2.0.28", "failed", true},
+		{"continuation-failed", "2.0.28", "failed", true},
+		{"continuation-no-proof", "2.0.28", "failed", true},
+		{"continuation-other-assistant", "2.0.28", "failed", true},
+		{"continuation-stop", "1.18.31", "failed", false},
 		{"export-fails", "2.0.28", "failed", true},
 		{"export-stalls", "2.0.28", "timeout", true},
 		{"oversized", "2.0.28", "failed", true},

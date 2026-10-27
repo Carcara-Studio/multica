@@ -31,6 +31,13 @@ completion indefinitely.
 
 ## Scope controls
 
+R5 #118 extends ADR-036 query eligibility to the DEV-13 continuation-gap
+diagnosis. The native proof predicate is unchanged: the current persisted
+assistant must have stopped and the turn must end in successful idle. A pending
+continuation, failed turn or unavailable proof remains failed. This does not
+establish whether free-model availability caused the maintainer's failure,
+does not add inference/replay, and does not close #114 or R5.
+
 R5 follow-up #116 / ADR-036 records the post-#115 identity test: each monitor's
 visible marker and status had the correct author, but three task attempts per
 monitor failed with an open step at EOF. Native OpenCode 2 completion proof now
