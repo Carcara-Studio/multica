@@ -1927,6 +1927,7 @@ func (b *codexBackend) executeOnce(ctx context.Context, prompt string, opts Exec
 
 		resCh <- Result{
 			Status:                       finalStatus,
+			NativeQuota:                  c.nativeQuotaObservation(finalStatus, threadID),
 			Output:                       finalOutput,
 			Error:                        finalError,
 			SessionID:                    threadID,
@@ -2447,6 +2448,7 @@ type codexClient struct {
 
 	turnErrorMu sync.Mutex
 	turnError   string // captured from turn/completed status=failed or terminal error notifications
+	nativeQuota *NativeQuotaObservation
 }
 
 type codexAgentMessageStream struct {
@@ -3533,6 +3535,7 @@ func (c *codexClient) handleRawNotification(method string, params map[string]any
 			return
 		}
 		c.turnCompleted = true
+		c.observeNativeQuotaCompletion(params)
 		c.setActiveTurnID("")
 		aborted := status == "cancelled" || status == "canceled" ||
 			status == "aborted" || status == "interrupted"
