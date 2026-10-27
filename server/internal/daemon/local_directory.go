@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 )
 
 // localDirectoryResourceType is the project_resource discriminator the daemon
@@ -453,6 +455,7 @@ func isGitWorkTree(ctx context.Context, path string) bool {
 }
 
 // LocalPathLocker serialises agent tasks that share the same on-disk path.
+// A stable OS lock extends the local queue across daemon processes; see ADR-037.
 // The lock is owned for the entire lifetime of a task (claim → context
 // write → agent execution → result report), not just the agent execution
 // window, because the context files and skill scratch directories the
@@ -512,6 +515,34 @@ func (l *LocalPathLocker) Holder(realPath string) string {
 // context-aware cancellation — a daemon shutdown won't wedge inside the
 // per-path wait queue.
 func (l *LocalPathLocker) Acquire(ctx context.Context, realPath, taskID string, onWait func(holder string)) (func(), error) {
+	var announced bool
+	wait := func(holder string) {
+		if !announced {
+			announced = true
+			if onWait != nil {
+				onWait(holder)
+			}
+		}
+	}
+	releaseLocal, err := l.acquireLocal(ctx, realPath, taskID, wait)
+	if err != nil {
+		return nil, err
+	}
+	releaseFile, err := execenv.AcquireLocalDirectoryLock(ctx, realPath, func() { wait("") })
+	if err != nil {
+		releaseLocal()
+		return nil, err
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			releaseFile()
+			releaseLocal()
+		})
+	}, nil
+}
+
+func (l *LocalPathLocker) acquireLocal(ctx context.Context, realPath, taskID string, onWait func(holder string)) (func(), error) {
 	if realPath == "" {
 		return nil, errors.New("local_directory: realpath required for lock")
 	}

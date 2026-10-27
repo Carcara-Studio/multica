@@ -590,6 +590,10 @@ jobs:
         # that stops matching) is visible in the log instead of passing as "ok".
         run: go test ./pkg/agent -v -run '^(TestCursorExecutePromptSurvivesPowerShellShim|TestPiExecutePromptSurvivesPowerShellShim|TestQwenExecutePromptSurvivesPowerShellShim|TestPlatformCursorInvocation|TestPlatformCopilotInvocation|TestPlatformPiInvocation|TestPlatformQwenInvocation|TestCodexStdin)' -count=1 -timeout=5m
 
+      - name: Test Windows cross-process local-directory exclusion
+        working-directory: server
+        run: go test ./internal/daemon ./internal/daemon/execenv -v -run '^(TestLocalPathLocker.*|TestLocalDirectoryProcessLock|TestLocalDirectoryLockHolderProcess)$' -count=1 -timeout=3m
+
       - name: Test Windows OpenCode oversized prompt reaches stdin
         working-directory: server
         # #6538: the daemon inlined the whole task prompt as an argv element,

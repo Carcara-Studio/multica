@@ -406,7 +406,7 @@ func TestIsDriveRoot(t *testing.T) {
 
 func TestLocalPathLockerSerializes(t *testing.T) {
 	locker := NewLocalPathLocker()
-	const path = "/some/path"
+	path := t.TempDir()
 
 	rel1, err := locker.Acquire(context.Background(), path, "task-1", nil)
 	if err != nil {
@@ -463,11 +463,38 @@ func TestLocalPathLockerSerializes(t *testing.T) {
 	}
 }
 
+func TestLocalPathLockerIndependentInstances(t *testing.T) {
+	path := t.TempDir()
+	first, second := NewLocalPathLocker(), NewLocalPathLocker()
+	release, err := first.Acquire(context.Background(), path, "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	unlock, err := second.Acquire(ctx, path, "second", nil)
+	if unlock != nil {
+		unlock()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("independent locker bypassed held path: %v", err)
+	}
+	release()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	unlock, err = second.Acquire(ctx2, path, "second", nil)
+	if err != nil {
+		t.Fatalf("acquire after release: %v", err)
+	}
+	unlock()
+}
+
 func TestLocalPathLockerCtxCancel(t *testing.T) {
 	t.Parallel()
 
 	locker := NewLocalPathLocker()
-	const path = "/some/path"
+	path := t.TempDir()
 
 	rel1, err := locker.Acquire(context.Background(), path, "task-1", nil)
 	if err != nil {
@@ -489,8 +516,9 @@ func TestLocalPathLockerCtxCancel(t *testing.T) {
 
 func TestLocalPathLockerDistinctPathsParallel(t *testing.T) {
 	locker := NewLocalPathLocker()
+	base := t.TempDir()
 
-	rel1, err := locker.Acquire(context.Background(), "/a", "task-1", nil)
+	rel1, err := locker.Acquire(context.Background(), filepath.Join(base, "a"), "task-1", nil)
 	if err != nil {
 		t.Fatalf("acquire 1: %v", err)
 	}
@@ -502,7 +530,7 @@ func TestLocalPathLockerDistinctPathsParallel(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		rel2, err := locker.Acquire(context.Background(), "/b", "task-2", nil)
+		rel2, err := locker.Acquire(context.Background(), filepath.Join(base, "b"), "task-2", nil)
 		if err != nil {
 			t.Errorf("acquire 2: %v", err)
 			return
