@@ -862,6 +862,9 @@ type opencodeToolState struct {
 type opencodeError struct {
 	Name string           `json:"name,omitempty"`
 	Data *opencodeErrData `json:"data,omitempty"`
+	// OpenCode 2 uses a flat error envelope instead of name/data.message.
+	Type string `json:"type,omitempty"`
+	Msg  string `json:"message,omitempty"`
 }
 
 // Message returns the human-readable error message.
@@ -869,10 +872,16 @@ func (e *opencodeError) Message() string {
 	if e.Data != nil && e.Data.Message != "" {
 		return e.Data.Message
 	}
+	if e.Msg != "" {
+		if e.Type != "" {
+			return e.Type + ": " + e.Msg
+		}
+		return e.Msg
+	}
 	if e.Name != "" {
 		return e.Name
 	}
-	return ""
+	return e.Type
 }
 
 type opencodeErrData struct {

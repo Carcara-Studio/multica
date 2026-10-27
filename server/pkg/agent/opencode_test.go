@@ -464,6 +464,21 @@ func TestOpencodeErrorMessage(t *testing.T) {
 			want: "RateLimitError",
 		},
 		{
+			name: "v2 type and message",
+			err:  &opencodeError{Type: "provider.quota", Msg: "quota exhausted"},
+			want: "provider.quota: quota exhausted",
+		},
+		{
+			name: "v2 message only",
+			err:  &opencodeError{Msg: "request rejected"},
+			want: "request rejected",
+		},
+		{
+			name: "v2 type only",
+			err:  &opencodeError{Type: "provider.quota"},
+			want: "provider.quota",
+		},
+		{
 			name: "empty",
 			err:  &opencodeError{},
 			want: "",
@@ -482,6 +497,27 @@ func TestOpencodeErrorMessage(t *testing.T) {
 //
 // These feed multiple JSON lines through processEvents and verify the
 // accumulated result (status, output, sessionID, error) and emitted messages.
+
+func TestOpencodeProcessEventsV2Error(t *testing.T) {
+	t.Parallel()
+	b := &opencodeBackend{cfg: Config{Logger: slog.Default()}}
+	ch := make(chan Message, 8)
+	result := b.processEvents(strings.NewReader(`{"type":"error","sessionID":"ses_fixture","error":{"type":"provider.quota","message":"quota exhausted","status":402}}`), ch)
+	if result.status != "failed" || result.errMsg != "provider.quota: quota exhausted" {
+		t.Fatalf("unexpected V2 error result: %+v", result)
+	}
+	if result.completionMessageID != "" {
+		t.Fatal("explicit provider error must not query completion proof")
+	}
+	select {
+	case msg := <-ch:
+		if msg.Type != MessageError || msg.Content != result.errMsg {
+			t.Fatalf("unexpected error message: %+v", msg)
+		}
+	default:
+		t.Fatal("missing error message")
+	}
+}
 
 func TestOpencodeProcessEventsHappyPath(t *testing.T) {
 	t.Parallel()
