@@ -463,6 +463,33 @@ func TestLocalPathLockerSerializes(t *testing.T) {
 	}
 }
 
+func TestLocalPathLockerIndependentInstances(t *testing.T) {
+	path := t.TempDir()
+	first, second := NewLocalPathLocker(), NewLocalPathLocker()
+	release, err := first.Acquire(context.Background(), path, "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	unlock, err := second.Acquire(ctx, path, "second", nil)
+	if unlock != nil {
+		unlock()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("independent locker bypassed held path: %v", err)
+	}
+	release()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	unlock, err = second.Acquire(ctx2, path, "second", nil)
+	if err != nil {
+		t.Fatalf("acquire after release: %v", err)
+	}
+	unlock()
+}
+
 func TestLocalPathLockerCtxCancel(t *testing.T) {
 	t.Parallel()
 
