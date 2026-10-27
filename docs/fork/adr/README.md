@@ -217,3 +217,5 @@ The numbering above records the accepted architecture set. Future ADR numbers mu
 [ADR-036](ADR-036-opencode-native-completion-proof.md) defines R5 bounded read-only OpenCode 2 completion verification against exact persisted session/message identity (#116).
 
 [ADR-037](ADR-037-cross-process-local-directory.md) extends existing local-directory exclusion across daemon processes without restricting independent profiles (#122, R5).
+
+[ADR-038](ADR-038-native-login-path-availability.md) defines the maintainer-approved limited native-login path availability mode for R4; activation still requires end-to-end routing and isolated probes.
