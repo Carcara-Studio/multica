@@ -655,11 +655,21 @@ func (c *Client) ReportTaskUsage(ctx context.Context, taskID string, usage []Tas
 }
 
 func (c *Client) FailTask(ctx context.Context, taskID, errMsg, sessionID, workDir, branchName, failureReason string, sessionRolloutMissing bool, retiredSessionID, durableWorkDir string) error {
-	return c.failTaskWithRetrySchedule(ctx, taskID, errMsg, sessionID, workDir, branchName, failureReason, sessionRolloutMissing, retiredSessionID, durableWorkDir, defaultTerminalRetrySchedule)
+	return c.failTaskWithRetrySchedule(ctx, terminalTaskReport{
+		kind: terminalTaskReportFail, taskID: taskID, errorMessage: errMsg,
+		sessionID: sessionID, workDir: workDir, branchName: branchName, failureReason: failureReason,
+		sessionRolloutMissing: sessionRolloutMissing, retiredSessionID: retiredSessionID, durableWorkDir: durableWorkDir,
+	}, defaultTerminalRetrySchedule)
 }
 
-func (c *Client) failTaskWithRetrySchedule(ctx context.Context, taskID, errMsg, sessionID, workDir, branchName, failureReason string, sessionRolloutMissing bool, retiredSessionID, durableWorkDir string, schedule []time.Duration) error {
+func (c *Client) failTaskWithRetrySchedule(ctx context.Context, report terminalTaskReport, schedule []time.Duration) error {
+	taskID, errMsg, sessionID, workDir := report.taskID, report.errorMessage, report.sessionID, report.workDir
+	branchName, failureReason := report.branchName, report.failureReason
+	sessionRolloutMissing, retiredSessionID, durableWorkDir := report.sessionRolloutMissing, report.retiredSessionID, report.durableWorkDir
 	body := map[string]any{"error": errMsg}
+	if report.kind == terminalTaskReportFail && report.nativeQuota.HasSupportedShape() {
+		body["native_quota"] = report.nativeQuota
+	}
 	if sessionID != "" {
 		body["session_id"] = sessionID
 	}

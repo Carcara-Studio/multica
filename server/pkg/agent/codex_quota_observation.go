@@ -5,10 +5,17 @@ package agent
 // retry/route work. Callers must still bind the result to their authenticated
 // run and current target/configuration fences (ADR-038).
 type NativeQuotaObservation struct {
-	Provider  string
-	Code      string
-	SessionID string
-	TurnID    string
+	Provider  string `json:"provider"`
+	Code      string `json:"code"`
+	SessionID string `json:"session_id"`
+	TurnID    string `json:"turn_id"`
+}
+
+// HasSupportedShape validates syntax only, not authenticated origin, model,
+// configuration or permission to change availability.
+func (q NativeQuotaObservation) HasSupportedShape() bool {
+	return q.Provider == "codex" && q.Code == "usageLimitExceeded" &&
+		boundedCodexObservationID(q.SessionID) && boundedCodexObservationID(q.TurnID)
 }
 
 func (c *codexClient) observeNativeQuotaCompletion(params map[string]any) {

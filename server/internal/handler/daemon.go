@@ -5096,6 +5096,9 @@ func (h *Handler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 // FailTask marks a running task as failed.
 type TaskFailRequest struct {
+	NativeQuota json.RawMessage `json:"native_quota,omitempty"`
+	nativeQuota *nativeQuotaDiagnostic
+
 	Error          string `json:"error"`
 	SessionID      string `json:"session_id,omitempty"`
 	WorkDir        string `json:"work_dir,omitempty"`
@@ -5120,7 +5123,7 @@ func (h *Handler) FailTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
 
 	// Verify the caller owns this task's workspace.
-	_, workspaceID, ok := h.requireDaemonTaskAccessWithWorkspace(w, r, taskID)
+	task, workspaceID, ok := h.requireDaemonTaskAccessWithWorkspace(w, r, taskID)
 	if !ok {
 		return
 	}
@@ -5134,6 +5137,11 @@ func (h *Handler) FailTask(w http.ResponseWriter, r *http.Request) {
 	// here lands in a TEXT column too and a NUL in any one of them fails the
 	// same transaction (GH #7098).
 	sanitizeTaskFailRequest(&req)
+	req.nativeQuota = h.nativeQuotaDiagnostic(r, task, workspaceID, req)
+	if req.nativeQuota != nil {
+		// Native quota may veto a text-based network retry, never authorize one.
+		req.FailureReason = taskfailure.ReasonAgentProviderQuotaLimit.String()
+	}
 
 	h.failTask(w, r, taskID, workspaceID, req)
 }
@@ -5176,6 +5184,14 @@ func (h *Handler) failTask(w http.ResponseWriter, r *http.Request, taskID, works
 	}
 
 	slog.Info("task failed", "task_id", taskID, "agent_id", uuidToString(task.AgentID), "task_error", req.Error, "failure_reason", req.FailureReason)
+	if q := req.nativeQuota; q != nil && q.taskID == task.ID && q.runtimeID == task.RuntimeID {
+		// Transport correlation is diagnostic only. Current route/configuration,
+		// model, owner and capability fences must precede any future state change.
+		slog.Info("native quota report received", "task_id", taskID,
+			"runtime_id", uuidToString(q.runtimeID), "daemon_id", q.daemonID,
+			"provider", q.observation.Provider, "native_code", q.observation.Code,
+			"native_turn_id", q.observation.TurnID, "routing_authority", false)
+	}
 	writeJSON(w, http.StatusOK, taskToResponse(*task, workspaceID))
 }
 

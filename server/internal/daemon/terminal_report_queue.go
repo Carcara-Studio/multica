@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/multica-ai/multica/server/pkg/agent"
 )
 
 const (
@@ -43,6 +45,8 @@ const (
 // untouched and reported on every replay pass; downgrading must never delete a
 // payload merely because the older binary cannot decode it.
 type persistedTerminalTaskReport struct {
+	NativeQuota agent.NativeQuotaObservation `json:"native_quota,omitzero"`
+
 	Version               int       `json:"version"`
 	CreatedAt             time.Time `json:"created_at"`
 	Kind                  string    `json:"kind"`
@@ -133,6 +137,7 @@ func persistedTerminalReport(report terminalTaskReport, createdAt time.Time) (pe
 		return persistedTerminalTaskReport{}, err
 	}
 	return persistedTerminalTaskReport{
+		NativeQuota:           report.nativeQuota,
 		Version:               terminalReportRecordVersion,
 		CreatedAt:             createdAt.UTC(),
 		Kind:                  kind,
@@ -166,6 +171,7 @@ func (record persistedTerminalTaskReport) terminalReport() (terminalTaskReport, 
 		return terminalTaskReport{}, fmt.Errorf("unsupported terminal report kind %q", record.Kind)
 	}
 	return terminalTaskReport{
+		nativeQuota:           record.NativeQuota,
 		kind:                  kind,
 		taskID:                record.TaskID,
 		output:                record.Output,
