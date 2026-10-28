@@ -5040,7 +5040,11 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 		// ON CONFLICT DO NOTHING, which yields the slot instead of raising and so
 		// can never abort this transaction — which also carries the parent's
 		// failed status.
-		createRetry := wantRetry && retryableReasons[failureReason]
+		// A supported, executor-correlated preflight can conservatively veto
+		// replay even if current runtime facts no longer permit narrowing the
+		// stored reason. Losing current-path proof cannot authorize partial work
+		// to run again. Uncorrelated/malformed HTTP metadata never reaches here.
+		createRetry := wantRetry && retryableReasons[failureReason] && !params.NativeQuota
 		if createRetry {
 			successor, herr := hasRunnableSuccessor(ctx, qtx, t)
 			if herr != nil {

@@ -87,9 +87,9 @@ func TestNativeQuotaFailureUsesTerminalWriteSource(t *testing.T) {
 			var retries, availability int
 			f.QueryRow(t, `SELECT count(*) FROM agent_task_queue WHERE parent_task_id=$1 OR retry_of_task_id=$1`, taskID).Scan(&retries)
 			f.QueryRow(t, `SELECT count(*) FROM agent_failover_state WHERE agent_id=$1`, agentID).Scan(&availability)
-			wantRetries := 1
-			if mode == "current" || mode == "withheld session" || mode == "commit failure" {
-				wantRetries = 0
+			wantRetries := 0
+			if mode == "foreign session" || mode == "unknown native code" {
+				wantRetries = 1
 			}
 			if retries != wantRetries || availability != 0 {
 				t.Fatalf("retry count=%d want=%d; availability rows=%d", retries, wantRetries, availability)

@@ -36,8 +36,10 @@ A preflight only carries optional source facts into the terminal transaction.
 The existing failure UPDATE rechecks running status, the actual selected runtime,
 Codex provider, daemon and Agent/runtime workspace in its statement snapshot
 before narrowing the stored reason to quota. A stale source retains the ordinary
-reason and retry policy. Subsequent retry, session and chat decisions use the
-stored reason; supported native quota cannot replay a conflicting network failure.
+reason, but a supported executor-correlated preflight still conservatively vetoes
+replay: losing current-path proof cannot authorize repeating possible partial
+work. Uncorrelated or malformed metadata retains ordinary retry handling.
+Subsequent session and chat decisions use the stored reason.
 The retry overlay is still prepared before the transaction, without network I/O
 under terminal locks. This adds no new lock order or availability transition.
 
