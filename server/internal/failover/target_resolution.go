@@ -109,6 +109,21 @@ func DescribeTargetBinding(a db.Agent, c db.AgentFallbackConfig, s db.AgentFailo
 	if c.NativeLoginPath {
 		return TargetBinding{}, ErrExecutionEvidence
 	}
+	return describeTargetBinding(a, c, s, route, r, catalog)
+}
+
+// DescribeNativePathBinding describes one selected route's non-secret metadata,
+// not execution readiness or authorization. Callers must independently supply
+// current server-owned rows/catalog and later fence owner/configuration changes.
+// No credential proof, ResolvedTarget or enqueue route proof is produced here.
+func DescribeNativePathBinding(a db.Agent, c db.AgentFallbackConfig, s db.AgentFailoverState, route string, r db.AgentRuntime, catalog agent.Catalog) (TargetBinding, error) {
+	if !c.NativeLoginPath {
+		return TargetBinding{}, ErrExecutionEvidence
+	}
+	return describeTargetBinding(a, c, s, route, r, catalog)
+}
+
+func describeTargetBinding(a db.Agent, c db.AgentFallbackConfig, s db.AgentFailoverState, route string, r db.AgentRuntime, catalog agent.Catalog) (TargetBinding, error) {
 	if !validPolicySnapshot(a, &c, &s) {
 		return TargetBinding{}, ErrTargetResolution
 	}
@@ -120,6 +135,10 @@ func DescribeTargetBinding(a db.Agent, c db.AgentFallbackConfig, s db.AgentFailo
 		selected.RuntimeMode = r.RuntimeMode
 	}
 	metadata := db.AgentFallbackConfig{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: selected.RuntimeID, Generation: c.Generation, Model: selected.Model.String, ThinkingLevel: selected.ThinkingLevel.String, ServiceTier: selected.ServiceTier.String}
+	metadata.NativeLoginPath = c.NativeLoginPath
+	if c.NativeLoginPath && !selected.Model.Valid {
+		return TargetBinding{}, ErrTargetResolution
+	}
 	if AssessFallbackMetadata(a, metadata, r, catalog).Status != MetadataCompatible {
 		return TargetBinding{}, ErrTargetResolution
 	}

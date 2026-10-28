@@ -24,6 +24,13 @@ func TestFallbackMetadataBindingAndLiteralGates(t *testing.T) {
 		reason string
 	}{
 		{"runtime defaults", func(*db.Agent, *db.AgentFallbackConfig, *db.AgentRuntime) {}, MetadataCompatible, ""},
+		{"native missing explicit model", func(_ *db.Agent, c *db.AgentFallbackConfig, _ *db.AgentRuntime) { c.NativeLoginPath = true }, MetadataUnknown, "native_explicit_model"},
+		{"native whitespace is not a selection", func(_ *db.Agent, c *db.AgentFallbackConfig, _ *db.AgentRuntime) {
+			c.NativeLoginPath, c.Model = true, "   "
+		}, MetadataUnknown, "native_explicit_model"},
+		{"native padded selection remains pending", func(_ *db.Agent, c *db.AgentFallbackConfig, _ *db.AgentRuntime) {
+			c.NativeLoginPath, c.Model = true, " gpt-test "
+		}, MetadataUnknown, "native_explicit_model"},
 		{"offline is not incompatibility", func(_ *db.Agent, _ *db.AgentFallbackConfig, r *db.AgentRuntime) { r.Status = "offline" }, MetadataCompatible, ""},
 		{"public runtime", func(_ *db.Agent, _ *db.AgentFallbackConfig, r *db.AgentRuntime) {
 			r.Visibility = "public"

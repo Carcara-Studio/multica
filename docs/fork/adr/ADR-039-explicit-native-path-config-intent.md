@@ -39,6 +39,16 @@ trusted run/turn evidence, all writers/claims and isolated real probes before
 native execution can be authorized. The strict verifier and observer remain
 closed, and credential epochs are never fabricated to bridge modes.
 
+`DescribeNativePathBinding` reuses the existing target overlay and metadata
+checks to describe one selected route's non-secret binding. Unlike strict
+description it requires native intent and an explicit verified catalog selection;
+an implicit/default or whitespace-padded model remains pending metadata. It does
+not produce `ResolvedTarget`, route proof or execution approval. Its caller must
+supply current server-owned rows/catalog and later enforce authenticated scope,
+owner/configuration locks, native effective selection and required capabilities.
+Catalog IDs and options alone do not prove actual CLI overrides, preserved tools/
+MCP/hooks/context, safe session isolation or an isolated real recovery probe.
+
 Migration900029 adds one column with strict defaults, without changing existing
 generations, availability or routes. It adds no FK, index or backfill into native
 mode. Applying it requires the existing base table; a missing table must fail
