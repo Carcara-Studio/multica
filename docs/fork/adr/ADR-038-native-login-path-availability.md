@@ -71,6 +71,10 @@ configuration/route resolution, every writer/claim/retry, quota settlement and
 isolated primary probes before enabling this mode. No partial slice closes R4.
 No new auth service, generic executor or account-health subsystem is introduced.
 
+[Explicit configuration intent](ADR-039-explicit-native-path-config-intent.md)
+persists this policy separately from strict credential policy. Saving that intent
+does not enable execution; strict resolution cannot authorize native-mode rows.
+
 [Native callback transport](../NATIVE_QUOTA_TRANSPORT.md) preserves the optional
 observation through the terminal outbox and correlates diagnostics using existing
 daemon credential scope. Correlation may veto a network retry but is not accepted

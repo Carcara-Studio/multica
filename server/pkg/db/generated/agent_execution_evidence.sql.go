@@ -13,9 +13,9 @@ import (
 
 const consumeAgentExecutionChallenge = `-- name: ConsumeAgentExecutionChallenge :one
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config, c.native_login_path FROM agent_fallback_config c
     WHERE c.agent_id = $1 AND c.workspace_id = $2
-      AND c.generation = $3
+      AND c.generation = $3 AND NOT c.native_login_path
     FOR SHARE
 ), locked AS MATERIALIZED (
     SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s, config c
@@ -100,9 +100,9 @@ func (q *Queries) ConsumeAgentExecutionChallenge(ctx context.Context, arg Consum
 const issueAgentExecutionChallenge = `-- name: IssueAgentExecutionChallenge :one
 
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config, c.native_login_path FROM agent_fallback_config c
     WHERE c.agent_id = $9 AND c.workspace_id = $10
-      AND c.generation = $11
+      AND c.generation = $11 AND NOT c.native_login_path
     FOR SHARE
 ), locked AS MATERIALIZED (
     SELECT s.agent_id, s.workspace_id, s.primary_generation, s.state, s.version, s.primary_failed_at, s.primary_failure_task_id, s.next_probe_at, s.last_probe_at, s.last_probe_reason, s.recovered_at, s.probe_token, s.probe_runtime_id, s.probe_lease_until, s.probe_dispatched_at, s.suspended_at, s.created_at, s.updated_at, s.evidence_context, s.evidence_token, s.evidence_issued_at, s.evidence_expires_at FROM agent_failover_state s, config c

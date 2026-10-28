@@ -8,7 +8,7 @@
 WITH config AS MATERIALIZED (
     SELECT c.* FROM agent_fallback_config c
     WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
-      AND c.generation = @fallback_generation
+      AND c.generation = @fallback_generation AND NOT c.native_login_path
     FOR SHARE
 ), locked AS MATERIALIZED (
     SELECT s.* FROM agent_failover_state s, config c
@@ -37,7 +37,7 @@ RETURNING s.evidence_token, s.evidence_issued_at, s.evidence_expires_at;
 WITH config AS MATERIALIZED (
     SELECT c.* FROM agent_fallback_config c
     WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
-      AND c.generation = @fallback_generation
+      AND c.generation = @fallback_generation AND NOT c.native_login_path
     FOR SHARE
 ), locked AS MATERIALIZED (
     SELECT s.* FROM agent_failover_state s, config c

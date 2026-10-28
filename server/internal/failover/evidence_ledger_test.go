@@ -53,6 +53,20 @@ func issueEvidence(t *testing.T, l EvidenceLedger, r EvidenceRequest) EvidenceCh
 	return c
 }
 
+func TestStrictEvidenceLedgerRejectsNativeLoginPathPolicy(t *testing.T) {
+	f, _, l, r := ledgerFixture(t)
+	c := issueEvidence(t, l, r)
+	// Adversarial fixture: even if a writer neglected generation rotation,
+	// the strict persistence boundary cannot issue/consume native policy.
+	f.fx.Exec(t, `UPDATE agent_fallback_config SET native_login_path=true WHERE agent_id=$1`, f.row.AgentID)
+	if got, err := l.Issue(t.Context(), r); !errors.Is(err, ErrExecutionEvidence) || got.Token.Valid {
+		t.Fatal("native config acquired strict challenge", err)
+	}
+	if got, err := l.Consume(t.Context(), r, ledgerReport(c)); !errors.Is(err, ErrExecutionEvidence) || got.verified {
+		t.Fatal("native config acquired strict evidence", err)
+	}
+}
+
 func TestEvidenceLedgerSupersedesAndSurvivesManagerRestartWithSingleConsumer(t *testing.T) {
 	f, _, l, r := ledgerFixture(t)
 	first := issueEvidence(t, l, r)

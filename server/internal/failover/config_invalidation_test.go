@@ -14,7 +14,7 @@ func configEdit(c db.AgentFallbackConfig, s db.AgentFailoverState) db.UpdateAgen
 		AgentID: c.AgentID, WorkspaceID: c.WorkspaceID, RuntimeID: c.RuntimeID,
 		ExpectedGeneration: c.Generation, NewGeneration: newGeneration(),
 		ExpectedPrimaryGeneration: s.PrimaryGeneration, ExpectedVersion: s.Version, NewPrimaryGeneration: newGeneration(),
-		Model: "changed-model", ThinkingLevel: c.ThinkingLevel, ServiceTier: c.ServiceTier,
+		Model: "changed-model", ThinkingLevel: c.ThinkingLevel, ServiceTier: c.ServiceTier, NativeLoginPath: c.NativeLoginPath,
 	}
 }
 func configRemoval(c db.AgentFallbackConfig, s db.AgentFailoverState) db.DeleteAgentFallbackConfigParams {

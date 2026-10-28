@@ -77,7 +77,7 @@ func (e EvidenceExchange) begin(ctx context.Context, s EvidenceSelection) (*evid
 	if err != nil {
 		return fail(ErrEvidenceStore)
 	}
-	if !hc || !hs || !validPolicySnapshot(a, &c, &state) {
+	if !hc || !hs || c.NativeLoginPath || !validPolicySnapshot(a, &c, &state) {
 		return fail(ErrExecutionEvidence)
 	}
 	runtime, err := q.GetAgentRuntime(ctx, s.RuntimeID)

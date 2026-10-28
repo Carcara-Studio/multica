@@ -48,6 +48,42 @@ func saveManaged(t *testing.T, m ConfigManager, a ManagementActor, in SaveTarget
 	return v
 }
 
+func TestProtectedNativeLoginPathIntentPersistsWithoutGrantingExecution(t *testing.T) {
+	f, m, actor, in := managementFixture(t)
+	first := saveManaged(t, m, actor, in)
+	if first.NativeLoginPath {
+		t.Fatal("existing management default opted into native mode")
+	}
+	in.Expected, in.NativeLoginPath = first.Revision, true
+	native := saveManaged(t, m, actor, in)
+	if !native.NativeLoginPath || native.Revision.Generation == first.Revision.Generation || native.Revision.PrimaryGeneration == first.Revision.PrimaryGeneration || native.Revision.StateVersion <= first.Revision.StateVersion {
+		t.Fatal("mode edit failed to persist and fence old policy")
+	}
+	inspected, err := m.Inspect(t.Context(), actor, in.AgentID)
+	if err != nil || !reflect.DeepEqual(inspected, native) {
+		t.Fatal("mode was lost in redacted inspection", err)
+	}
+	in.NativeLoginPath = false // stale writer cannot revert the new policy
+	if _, err := m.Save(t.Context(), actor, in, agent.Catalog{}); !errors.Is(err, ErrTargetConflict) {
+		t.Fatal("stale mode edit bypassed CAS", err)
+	}
+	in.Expected = native.Revision
+	worker := actor
+	worker.Kind = "agent"
+	if _, err := m.Save(t.Context(), worker, in, agent.Catalog{}); !errors.Is(err, ErrTargetAccess) {
+		t.Fatal("worker gained protected mode management", err)
+	}
+	current, err := m.Inspect(t.Context(), actor, in.AgentID)
+	if err != nil || !reflect.DeepEqual(current, native) || auditCount(t, f) != 2 {
+		t.Fatal("rejected mode change altered state or audit", err)
+	}
+	// Explicitly reverting is another protected edit, never a health reset.
+	reverted := saveManaged(t, m, actor, in)
+	if reverted.NativeLoginPath || reverted.Revision.Generation == native.Revision.Generation {
+		t.Fatal("protected mode revert did not rotate policy")
+	}
+}
+
 func TestProtectedTargetSaveInspectRevealAndRemoval(t *testing.T) {
 	f, m, a, in := managementFixture(t)
 	f.fx.Exec(t, `UPDATE agent SET custom_env='{"PRIMARY":"primary-private-value"}',custom_args='["primary-argument-private-value"]',runtime_config='{"token":"primary-runtime-private-value"}' WHERE id=$1`, in.AgentID)
@@ -244,6 +280,7 @@ func TestProtectedTargetFailuresNeverGrantUnauditedSecretsOrPartialWrites(t *tes
 				}
 			}
 			in.Expected = v.Revision
+			in.NativeLoginPath = true
 			in.Overrides.CustomEnv = map[string]string{"REPLACED": "replacement-private-value"}
 			_, err := m.Save(t.Context(), a, in, agent.Catalog{})
 			if !errors.Is(err, ErrTargetStore) || strings.Contains(err.Error(), "private-value") {
@@ -282,6 +319,7 @@ func TestProtectedTargetConcurrentEditsAndDispatchedProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.Expected = ConfigRevision{Generation: v.Revision.Generation, PrimaryGeneration: p.PrimaryGeneration, StateVersion: p.Version}
+	in.NativeLoginPath = true
 	var wg sync.WaitGroup
 	var winners atomic.Int32
 	for range 2 {
@@ -302,7 +340,7 @@ func TestProtectedTargetConcurrentEditsAndDispatchedProbe(t *testing.T) {
 		t.Fatal("old probe recovered after secret change")
 	}
 	state := storedState(t, f.q, f)
-	if state.State != "fallback_active" || state.ProbeToken.Valid {
+	if state.State != "fallback_active" || state.ProbeToken.Valid || !storedConfig(t, f.q, c).NativeLoginPath {
 		t.Fatal("configuration save claimed primary health")
 	}
 }

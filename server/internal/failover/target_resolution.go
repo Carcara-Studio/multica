@@ -104,6 +104,11 @@ func ResolveQueuedTarget(a db.Agent, c *db.AgentFallbackConfig, s *db.AgentFailo
 // also be used for a separate tool-free probe capability challenge; it is never
 // an inference result or an instruction to execute the Agent-shaped payload.
 func DescribeTargetBinding(a db.Agent, c db.AgentFallbackConfig, s db.AgentFailoverState, route string, r db.AgentRuntime, catalog agent.Catalog) (TargetBinding, error) {
+	// Credential evidence must never authorize the separately opted-in path
+	// policy. Native path execution still needs its reviewed end-to-end gate.
+	if c.NativeLoginPath {
+		return TargetBinding{}, ErrExecutionEvidence
+	}
 	if !validPolicySnapshot(a, &c, &s) {
 		return TargetBinding{}, ErrTargetResolution
 	}
