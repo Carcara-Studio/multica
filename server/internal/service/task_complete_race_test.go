@@ -155,7 +155,7 @@ func TestFailTask_AlreadyFinalized(t *testing.T) {
 				Bus:     events.New(),
 			}
 
-			got, transitioned, err := svc.FailTaskWithTransition(context.Background(), taskID, "agent crashed", "", "", "", "", false, "", "")
+			got, transitioned, err := svc.FailTaskWithTransition(context.Background(), taskID, "agent crashed", "", "", "", "", false, "", "", nil)
 			if err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}

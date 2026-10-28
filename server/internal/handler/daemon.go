@@ -5138,10 +5138,6 @@ func (h *Handler) FailTask(w http.ResponseWriter, r *http.Request) {
 	// same transaction (GH #7098).
 	sanitizeTaskFailRequest(&req)
 	req.nativeQuota = h.nativeQuotaDiagnostic(r, task, workspaceID, req)
-	if req.nativeQuota != nil {
-		// Native quota may veto a text-based network retry, never authorize one.
-		req.FailureReason = taskfailure.ReasonAgentProviderQuotaLimit.String()
-	}
 
 	h.failTask(w, r, taskID, workspaceID, req)
 }
@@ -5157,7 +5153,11 @@ func (h *Handler) failTask(w http.ResponseWriter, r *http.Request, taskID, works
 	// keep a stale mid-flight pin) and flagging the row in the same commit that
 	// creates and wakes the auto-retry, so the retry can never claim the withheld
 	// pointer or miss the continuity gap.
-	task, transitioned, err := h.TaskService.FailTaskWithTransition(r.Context(), parseUUID(taskID), req.Error, req.SessionID, req.WorkDir, req.BranchName, req.FailureReason, req.SessionRolloutMissing, req.RetiredSessionID, req.DurableWorkDir)
+	var nativeQuota *service.NativeQuotaFailureSource
+	if q := req.nativeQuota; q != nil {
+		nativeQuota = &service.NativeQuotaFailureSource{TaskID: q.taskID, RuntimeID: q.runtimeID, WorkspaceID: parseUUID(workspaceID), DaemonID: q.daemonID, Observation: q.observation}
+	}
+	task, transitioned, err := h.TaskService.FailTaskWithTransition(r.Context(), parseUUID(taskID), req.Error, req.SessionID, req.WorkDir, req.BranchName, req.FailureReason, req.SessionRolloutMissing, req.RetiredSessionID, req.DurableWorkDir, nativeQuota)
 	if err != nil {
 		// A FailTask error is an infrastructure failure (the terminal
 		// transaction that also clears the withheld session, writes the
@@ -5183,7 +5183,7 @@ func (h *Handler) failTask(w http.ResponseWriter, r *http.Request, taskID, works
 		slog.Warn("fail task: failed to revoke task tokens", "task_id", uuidToString(task.ID), "error", err)
 	}
 
-	slog.Info("task failed", "task_id", taskID, "agent_id", uuidToString(task.AgentID), "task_error", req.Error, "failure_reason", req.FailureReason)
+	slog.Info("task failed", "task_id", taskID, "agent_id", uuidToString(task.AgentID), "task_error", req.Error, "failure_reason", task.FailureReason.String)
 	if q := req.nativeQuota; q != nil && q.taskID == task.ID && q.runtimeID == task.RuntimeID {
 		// Transport correlation is diagnostic only. Current route/configuration,
 		// model, owner and capability fences must precede any future state change.

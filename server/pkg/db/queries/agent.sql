@@ -1151,6 +1151,9 @@ LIMIT 1;
 --
 -- failure_reason is a coarse classifier consumed by the auto-retry path;
 -- 'agent_error' is the safe default when the daemon doesn't supply one.
+-- A supported native quota preflight may only narrow it using this terminal
+-- statement's running-task/executor snapshot. This is diagnostic correlation,
+-- not owner/configuration authorization or permission to activate fallback.
 --
 -- session_rollout_missing (MUL-5305): when true the daemon withheld this task's
 -- Codex session (its rollout was missing). Force session_id NULL — overriding
@@ -1161,7 +1164,17 @@ UPDATE agent_task_queue
 SET status = 'failed',
     completed_at = now(),
     error = $2,
-    failure_reason = COALESCE(sqlc.narg('failure_reason'), 'agent_error'),
+    failure_reason = CASE WHEN sqlc.arg('native_quota')::boolean
+        AND agent_task_queue.status = 'running'
+        AND agent_task_queue.runtime_id = sqlc.arg('native_quota_runtime_id')::uuid
+        AND EXISTS (
+            SELECT 1 FROM agent_runtime r JOIN agent a ON a.id = agent_task_queue.agent_id
+            WHERE r.id = agent_task_queue.runtime_id AND r.provider = 'codex'
+              AND r.daemon_id = sqlc.arg('native_quota_daemon_id')::text
+              AND r.workspace_id = sqlc.arg('native_quota_workspace_id')::uuid
+              AND a.workspace_id = r.workspace_id
+        ) THEN 'agent_error.provider_quota_limit'
+        ELSE COALESCE(sqlc.narg('failure_reason'), 'agent_error') END,
     session_id = CASE WHEN sqlc.arg('session_rollout_missing') THEN NULL ELSE COALESCE(sqlc.narg('session_id'), session_id) END,
     work_dir = COALESCE(sqlc.narg('work_dir'), work_dir),
     durable_work_dir = COALESCE(sqlc.narg('durable_work_dir'), durable_work_dir),
@@ -1169,8 +1182,8 @@ SET status = 'failed',
     session_rollout_missing = sqlc.arg('session_rollout_missing'),
     retired_session_id = COALESCE(sqlc.narg('retired_session_id'), retired_session_id),
     prepare_lease_expires_at = NULL
-WHERE id = $1 AND status IN ('dispatched', 'running', 'waiting_local_directory')
-RETURNING *;
+WHERE agent_task_queue.id = $1 AND agent_task_queue.status IN ('dispatched', 'running', 'waiting_local_directory')
+RETURNING agent_task_queue.*;
 
 -- name: UpdateAgentTaskSession :exec
 -- Pins the resume pointer mid-flight so a daemon crash leaves a usable

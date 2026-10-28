@@ -3358,28 +3358,42 @@ UPDATE agent_task_queue
 SET status = 'failed',
     completed_at = now(),
     error = $2,
-    failure_reason = COALESCE($3, 'agent_error'),
-    session_id = CASE WHEN $4 THEN NULL ELSE COALESCE($5, session_id) END,
-    work_dir = COALESCE($6, work_dir),
-    durable_work_dir = COALESCE($7, durable_work_dir),
-    branch_name = COALESCE($8, branch_name),
-    session_rollout_missing = $4,
-    retired_session_id = COALESCE($9, retired_session_id),
+    failure_reason = CASE WHEN $3::boolean
+        AND agent_task_queue.status = 'running'
+        AND agent_task_queue.runtime_id = $4::uuid
+        AND EXISTS (
+            SELECT 1 FROM agent_runtime r JOIN agent a ON a.id = agent_task_queue.agent_id
+            WHERE r.id = agent_task_queue.runtime_id AND r.provider = 'codex'
+              AND r.daemon_id = $5::text
+              AND r.workspace_id = $6::uuid
+              AND a.workspace_id = r.workspace_id
+        ) THEN 'agent_error.provider_quota_limit'
+        ELSE COALESCE($7, 'agent_error') END,
+    session_id = CASE WHEN $8 THEN NULL ELSE COALESCE($9, session_id) END,
+    work_dir = COALESCE($10, work_dir),
+    durable_work_dir = COALESCE($11, durable_work_dir),
+    branch_name = COALESCE($12, branch_name),
+    session_rollout_missing = $8,
+    retired_session_id = COALESCE($13, retired_session_id),
     prepare_lease_expires_at = NULL
-WHERE id = $1 AND status IN ('dispatched', 'running', 'waiting_local_directory')
-RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, trigger_summary, force_fresh_session, is_leader_task, wait_reason, initiator_user_id, handoff_note, prepare_lease_expires_at, squad_id, runtime_mcp_overlay, escalation_for_task_id, fire_at, originator_user_id, runtime_connected_apps, coalesced_comment_ids, delivered_comment_ids, chat_input_task_id, chat_finalize_deferred_at, originator_source, delegated_from_task_id, retry_of_task_id, rerun_of_task_id, rule_version_id, trigger_evidence_kind, trigger_evidence_ref_id, accountable_user_id, session_rollout_missing, retired_session_id, quick_actions_disabled, regenerate_quick_actions_for, branch_name, durable_work_dir, channel_context_revision, comment_thread_id, cancelled_by_type, cancelled_by_id, cancelled_by_name, issue_snapshot, workflow_step
+WHERE agent_task_queue.id = $1 AND agent_task_queue.status IN ('dispatched', 'running', 'waiting_local_directory')
+RETURNING agent_task_queue.id, agent_task_queue.agent_id, agent_task_queue.issue_id, agent_task_queue.status, agent_task_queue.priority, agent_task_queue.dispatched_at, agent_task_queue.started_at, agent_task_queue.completed_at, agent_task_queue.result, agent_task_queue.error, agent_task_queue.created_at, agent_task_queue.context, agent_task_queue.runtime_id, agent_task_queue.session_id, agent_task_queue.work_dir, agent_task_queue.trigger_comment_id, agent_task_queue.chat_session_id, agent_task_queue.autopilot_run_id, agent_task_queue.attempt, agent_task_queue.max_attempts, agent_task_queue.parent_task_id, agent_task_queue.failure_reason, agent_task_queue.trigger_summary, agent_task_queue.force_fresh_session, agent_task_queue.is_leader_task, agent_task_queue.wait_reason, agent_task_queue.initiator_user_id, agent_task_queue.handoff_note, agent_task_queue.prepare_lease_expires_at, agent_task_queue.squad_id, agent_task_queue.runtime_mcp_overlay, agent_task_queue.escalation_for_task_id, agent_task_queue.fire_at, agent_task_queue.originator_user_id, agent_task_queue.runtime_connected_apps, agent_task_queue.coalesced_comment_ids, agent_task_queue.delivered_comment_ids, agent_task_queue.chat_input_task_id, agent_task_queue.chat_finalize_deferred_at, agent_task_queue.originator_source, agent_task_queue.delegated_from_task_id, agent_task_queue.retry_of_task_id, agent_task_queue.rerun_of_task_id, agent_task_queue.rule_version_id, agent_task_queue.trigger_evidence_kind, agent_task_queue.trigger_evidence_ref_id, agent_task_queue.accountable_user_id, agent_task_queue.session_rollout_missing, agent_task_queue.retired_session_id, agent_task_queue.quick_actions_disabled, agent_task_queue.regenerate_quick_actions_for, agent_task_queue.branch_name, agent_task_queue.durable_work_dir, agent_task_queue.channel_context_revision, agent_task_queue.comment_thread_id, agent_task_queue.cancelled_by_type, agent_task_queue.cancelled_by_id, agent_task_queue.cancelled_by_name, agent_task_queue.issue_snapshot, agent_task_queue.workflow_step
 `
 
 type FailAgentTaskParams struct {
-	ID                    pgtype.UUID `json:"id"`
-	Error                 pgtype.Text `json:"error"`
-	FailureReason         pgtype.Text `json:"failure_reason"`
-	SessionRolloutMissing bool        `json:"session_rollout_missing"`
-	SessionID             pgtype.Text `json:"session_id"`
-	WorkDir               pgtype.Text `json:"work_dir"`
-	DurableWorkDir        pgtype.Text `json:"durable_work_dir"`
-	BranchName            pgtype.Text `json:"branch_name"`
-	RetiredSessionID      pgtype.Text `json:"retired_session_id"`
+	ID                     pgtype.UUID `json:"id"`
+	Error                  pgtype.Text `json:"error"`
+	NativeQuota            bool        `json:"native_quota"`
+	NativeQuotaRuntimeID   pgtype.UUID `json:"native_quota_runtime_id"`
+	NativeQuotaDaemonID    string      `json:"native_quota_daemon_id"`
+	NativeQuotaWorkspaceID pgtype.UUID `json:"native_quota_workspace_id"`
+	FailureReason          pgtype.Text `json:"failure_reason"`
+	SessionRolloutMissing  bool        `json:"session_rollout_missing"`
+	SessionID              pgtype.Text `json:"session_id"`
+	WorkDir                pgtype.Text `json:"work_dir"`
+	DurableWorkDir         pgtype.Text `json:"durable_work_dir"`
+	BranchName             pgtype.Text `json:"branch_name"`
+	RetiredSessionID       pgtype.Text `json:"retired_session_id"`
 }
 
 // Marks a task as failed. session_id and work_dir are merged via COALESCE so
@@ -3391,6 +3405,9 @@ type FailAgentTaskParams struct {
 //
 // failure_reason is a coarse classifier consumed by the auto-retry path;
 // 'agent_error' is the safe default when the daemon doesn't supply one.
+// A supported native quota preflight may only narrow it using this terminal
+// statement's running-task/executor snapshot. This is diagnostic correlation,
+// not owner/configuration authorization or permission to activate fallback.
 //
 // session_rollout_missing (MUL-5305): when true the daemon withheld this task's
 // Codex session (its rollout was missing). Force session_id NULL — overriding
@@ -3401,6 +3418,10 @@ func (q *Queries) FailAgentTask(ctx context.Context, arg FailAgentTaskParams) (A
 	row := q.db.QueryRow(ctx, failAgentTask,
 		arg.ID,
 		arg.Error,
+		arg.NativeQuota,
+		arg.NativeQuotaRuntimeID,
+		arg.NativeQuotaDaemonID,
+		arg.NativeQuotaWorkspaceID,
 		arg.FailureReason,
 		arg.SessionRolloutMissing,
 		arg.SessionID,

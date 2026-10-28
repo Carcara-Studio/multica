@@ -4850,14 +4850,14 @@ func (s *TaskService) observeChatOutputLocalPath(task db.AgentTaskQueue, body st
 // (via classifyPoisonedError, the timeout / runtime classifier, etc.)
 // will have their value preserved untouched.
 func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg, sessionID, workDir, branchName, failureReason string, sessionRolloutMissing bool, retiredSessionID, durableWorkDir string) (*db.AgentTaskQueue, error) {
-	task, _, err := s.FailTaskWithTransition(ctx, taskID, errMsg, sessionID, workDir, branchName, failureReason, sessionRolloutMissing, retiredSessionID, durableWorkDir)
+	task, _, err := s.FailTaskWithTransition(ctx, taskID, errMsg, sessionID, workDir, branchName, failureReason, sessionRolloutMissing, retiredSessionID, durableWorkDir, nil)
 	return task, err
 }
 
 // FailTaskWithTransition is the failure counterpart to
 // CompleteTaskWithTransition. The bool is false for an idempotent replay that
 // observed an already-terminal row.
-func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.UUID, errMsg, sessionID, workDir, branchName, failureReason string, sessionRolloutMissing bool, retiredSessionID, durableWorkDir string) (*db.AgentTaskQueue, bool, error) {
+func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.UUID, errMsg, sessionID, workDir, branchName, failureReason string, sessionRolloutMissing bool, retiredSessionID, durableWorkDir string, nativeQuota *NativeQuotaFailureSource) (*db.AgentTaskQueue, bool, error) {
 	// Strip bytes PostgreSQL cannot store before anything else reads errMsg, so
 	// the classifier, the transaction and every downstream consumer see the one
 	// text we will actually persist (GH #7098). Kept at the service boundary
@@ -4932,7 +4932,7 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 		if err := lockChatSessionForTaskWrite(ctx, qtx, taskID); err != nil {
 			return err
 		}
-		t, err := qtx.FailAgentTask(ctx, db.FailAgentTaskParams{
+		params := db.FailAgentTaskParams{
 			ID:             taskID,
 			Error:          pgtype.Text{String: errMsg, Valid: true},
 			FailureReason:  pgtype.Text{String: failureReason, Valid: failureReason != ""},
@@ -4946,11 +4946,17 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 			BranchName:            pgtype.Text{String: branchName, Valid: branchName != ""},
 			SessionRolloutMissing: sessionRolloutMissing,
 			RetiredSessionID:      pgtype.Text{String: retiredSessionID, Valid: retiredSessionID != ""},
-		})
+		}
+		nativeQuota.apply(&params)
+		t, err := qtx.FailAgentTask(ctx, params)
 		if err != nil {
 			return err
 		}
 		task = t
+		// Native quota is narrowed by the same SQL snapshot that wins the
+		// terminal transition. Use its stored reason for every subsequent retry,
+		// session and chat decision; the handler's preflight is not that decision.
+		failureReason = t.FailureReason.String
 
 		// Atomic with the status flip, same as the completion path. A failed
 		// coordinator that already received the recovery comment has consumed
@@ -5034,7 +5040,11 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 		// ON CONFLICT DO NOTHING, which yields the slot instead of raising and so
 		// can never abort this transaction — which also carries the parent's
 		// failed status.
-		createRetry := wantRetry
+		// A supported, executor-correlated preflight can conservatively veto
+		// replay even if current runtime facts no longer permit narrowing the
+		// stored reason. Losing current-path proof cannot authorize partial work
+		// to run again. Uncorrelated/malformed HTTP metadata never reaches here.
+		createRetry := wantRetry && retryableReasons[failureReason] && !params.NativeQuota
 		if createRetry {
 			successor, herr := hasRunnableSuccessor(ctx, qtx, t)
 			if herr != nil {
