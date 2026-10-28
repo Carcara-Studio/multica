@@ -29,6 +29,15 @@ Upstream will continue moving after a validated baseline: later compatibility
 maintenance is ongoing maintenance, not a new condition that postpones project
 completion indefinitely.
 
+## R4 native probe feasibility
+
+[Codex request isolation capture](CODEX_PROBE_ISOLATION.md) verifies a pinned,
+opt-in native CLI request to a localhost fake provider, including a negative
+control for residual goal tools/skill instructions. It does not prove real
+inference, native-login recovery or absence of all startup side effects. R4 stays
+disabled pending trusted run/config binding, route integration and real isolated
+probe execution/settlement.
+
 ## Current Windows validation evidence (2026-10-27)
 
 The older incident notes below describe earlier test states. The later
