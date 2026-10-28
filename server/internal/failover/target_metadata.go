@@ -2,6 +2,7 @@ package failover
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/pkg/agent"
@@ -78,6 +79,11 @@ func AssessFallbackMetadata(a db.Agent, c db.AgentFallbackConfig, r db.AgentRunt
 	}
 	if provider == "codex" && c.ServiceTier != "" && c.ServiceTier != "default" && c.Model == "" {
 		return bad("service_tier_requires_model")
+	}
+	// Native path mode cannot use an implicit runtime default as evidence of
+	// an explicit selection. Pending metadata remains saveable by management.
+	if c.NativeLoginPath && (c.Model == "" || c.Model != strings.TrimSpace(c.Model)) {
+		return unknown("native_explicit_model")
 	}
 	model := c.Model
 	if model != "" {
