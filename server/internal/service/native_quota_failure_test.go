@@ -79,6 +79,7 @@ func TestNativeQuotaFailureUsesTerminalWriteSource(t *testing.T) {
 					t.Fatal("native quota restored withheld resume pointer")
 				}
 				// A duplicate cannot narrow an already terminal ordinary failure.
+				source.Observation = agent.NativeQuotaObservation{Provider: "codex", Code: "usageLimitExceeded", SessionID: "thread-1", TurnID: "later-turn"}
 				again, changed, err := svc.FailTaskWithTransition(t.Context(), source.TaskID, "different error", session, "", "", network, withheld, "", "", source)
 				if err != nil || changed || again.FailureReason.String != want || again.Error != task.Error {
 					t.Fatal("duplicate changed terminal classification", err)
