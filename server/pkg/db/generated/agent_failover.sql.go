@@ -13,7 +13,7 @@ import (
 
 const activateAgentFallbackState = `-- name: ActivateAgentFallbackState :one
 WITH config AS MATERIALIZED (
-    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config FROM agent_fallback_config c
+    SELECT c.agent_id, c.workspace_id, c.runtime_id, c.generation, c.model, c.thinking_level, c.service_tier, c.created_at, c.updated_at, c.execution_config, c.native_login_path FROM agent_fallback_config c
     WHERE c.agent_id = $1 AND c.workspace_id = $2
     FOR SHARE
 ), locked AS (

@@ -99,6 +99,41 @@ func TestUnconfiguredResolutionPreservesUpstreamPrimaryAndNoProof(t *testing.T) 
 	}
 }
 
+func TestNativeLoginPathCannotBorrowStrictCredentialEvidence(t *testing.T) {
+	for _, route := range []string{"primary", "fallback"} {
+		t.Run(route, func(t *testing.T) {
+			a, c, s, primary, fallback := resolutionFixture(t)
+			r := primary
+			if route == "fallback" {
+				s.State, r = "fallback_active", fallback
+			}
+			ctx := resolutionContext(t, a, c, s, route, r)
+			strict, err := ResolveEnqueueTarget(a, &c, &s, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			task, proof := queuedResolution(t, strict)
+			// Even otherwise valid fixture credential evidence cannot authorize
+			// native mode. Do not fake epochs to adapt it to another policy.
+			c.NativeLoginPath = true
+			if _, err := DescribeTargetBinding(a, c, s, route, r, ctx.Catalog); !errors.Is(err, ErrExecutionEvidence) {
+				t.Fatal("native mode acquired a strict binding", err)
+			}
+			if _, err := ResolveEnqueueTarget(a, &c, &s, ctx); !errors.Is(err, ErrExecutionEvidence) {
+				t.Fatal("native mode borrowed strict enqueue evidence", err)
+			}
+			if _, err := ResolveQueuedTarget(a, &c, &s, task, &proof, ctx); !errors.Is(err, ErrExecutionEvidence) {
+				t.Fatal("native mode borrowed strict claim evidence", err)
+			}
+			legacy := db.AgentTaskQueue{ID: newGeneration(), AgentID: a.ID, RuntimeID: primary.ID}
+			got, err := ResolveQueuedTarget(a, &c, &s, legacy, nil, ResolutionContext{Runtime: primary})
+			if err != nil || got.OptedIn() || got.Route() != "primary" || !reflect.DeepEqual(got.Agent(), a) {
+				t.Fatal("native metadata retroactively opted in a legacy task", err)
+			}
+		})
+	}
+}
+
 func TestFallbackResolutionOverlaysTargetWithoutDuplicatingIdentityOrSecrets(t *testing.T) {
 	a, c, s, _, fallback := resolutionFixture(t)
 	s.State = "fallback_active"

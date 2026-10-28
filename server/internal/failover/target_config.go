@@ -37,6 +37,7 @@ type ConfigRevision struct {
 type SaveTargetConfig struct {
 	AgentID, RuntimeID                pgtype.UUID
 	Model, ThinkingLevel, ServiceTier string
+	NativeLoginPath                   bool
 	Expected                          ConfigRevision
 	Overrides                         ExecutionOverrides
 }
@@ -45,6 +46,7 @@ type SaveTargetConfig struct {
 type ConfigView struct {
 	AgentID, RuntimeID                pgtype.UUID
 	Model, ThinkingLevel, ServiceTier string
+	NativeLoginPath                   bool
 	Revision                          ConfigRevision
 	OverridesStored                   bool
 	EnvironmentKeys                   []string
@@ -157,7 +159,7 @@ func revision(c db.AgentFallbackConfig, s db.AgentFailoverState, hasConfig, hasS
 	return r
 }
 func configView(c db.AgentFallbackConfig, s db.AgentFailoverState) (ConfigView, error) {
-	v := ConfigView{AgentID: c.AgentID, RuntimeID: c.RuntimeID, Model: c.Model, ThinkingLevel: c.ThinkingLevel, ServiceTier: c.ServiceTier, Revision: revision(c, s, true, true), EnvironmentKeys: []string{}}
+	v := ConfigView{AgentID: c.AgentID, RuntimeID: c.RuntimeID, Model: c.Model, ThinkingLevel: c.ThinkingLevel, ServiceTier: c.ServiceTier, NativeLoginPath: c.NativeLoginPath, Revision: revision(c, s, true, true), EnvironmentKeys: []string{}}
 	if len(c.ExecutionConfig) == 0 {
 		return v, nil
 	}
@@ -220,7 +222,7 @@ func (m ConfigManager) Save(ctx context.Context, actor ManagementActor, in SaveT
 	if revision(c, s, hasConfig, hasState) != in.Expected || (hasConfig && !hasState) {
 		return ConfigView{}, ErrTargetConflict
 	}
-	candidate := db.AgentFallbackConfig{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, Generation: freshConfigGeneration(), Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier}
+	candidate := db.AgentFallbackConfig{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, Generation: freshConfigGeneration(), Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier, NativeLoginPath: in.NativeLoginPath}
 	if assessment := AssessFallbackMetadata(a, candidate, runtime, catalog); assessment.Status == MetadataIncompatible {
 		return ConfigView{}, ErrTargetIncompatible
 	}
@@ -251,12 +253,12 @@ func (m ConfigManager) Save(ctx context.Context, actor ManagementActor, in SaveT
 	if err != nil || len(encoded) > 1<<20 {
 		return ConfigView{}, ErrTargetDocument
 	}
-	if err = targetAudit(ctx, q, a, actor, "agent_fallback_updated", map[string]any{"added_keys": diff.Added, "removed_keys": diff.Removed, "changed_keys": diff.Changed, "preserved_keys": diff.Preserved, "fields": []string{"runtime_id", "model", "thinking_level", "service_tier", "execution_config"}}); err != nil {
+	if err = targetAudit(ctx, q, a, actor, "agent_fallback_updated", map[string]any{"added_keys": diff.Added, "removed_keys": diff.Removed, "changed_keys": diff.Changed, "preserved_keys": diff.Preserved, "native_login_path": in.NativeLoginPath, "fields": []string{"runtime_id", "model", "thinking_level", "service_tier", "execution_config", "native_login_path"}}); err != nil {
 		return ConfigView{}, err
 	}
 	// All owner/audit writes finish before config -> state leaf locks.
 	if !hasConfig {
-		c, err = q.InitializeAgentFallbackConfig(ctx, db.InitializeAgentFallbackConfigParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, Generation: candidate.Generation, Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier, ExecutionConfig: encoded})
+		c, err = q.InitializeAgentFallbackConfig(ctx, db.InitializeAgentFallbackConfigParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, Generation: candidate.Generation, Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier, ExecutionConfig: encoded, NativeLoginPath: in.NativeLoginPath})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ConfigView{}, ErrTargetConflict
 		}
@@ -267,7 +269,7 @@ func (m ConfigManager) Save(ctx context.Context, actor ManagementActor, in SaveT
 	if !hasState {
 		s, err = q.InitializeAgentFailoverState(ctx, db.InitializeAgentFailoverStateParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID, PrimaryGeneration: freshConfigGeneration()})
 	} else {
-		c, err = q.UpdateAgentFallbackConfig(ctx, db.UpdateAgentFallbackConfigParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, ExpectedGeneration: c.Generation, NewGeneration: freshConfigGeneration(), ExpectedPrimaryGeneration: s.PrimaryGeneration, ExpectedVersion: s.Version, NewPrimaryGeneration: freshConfigGeneration(), Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier, ExecutionConfig: encoded})
+		c, err = q.UpdateAgentFallbackConfig(ctx, db.UpdateAgentFallbackConfigParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID, RuntimeID: in.RuntimeID, ExpectedGeneration: c.Generation, NewGeneration: freshConfigGeneration(), ExpectedPrimaryGeneration: s.PrimaryGeneration, ExpectedVersion: s.Version, NewPrimaryGeneration: freshConfigGeneration(), Model: in.Model, ThinkingLevel: in.ThinkingLevel, ServiceTier: in.ServiceTier, ExecutionConfig: encoded, NativeLoginPath: in.NativeLoginPath})
 		if err == nil {
 			s, err = q.GetAgentFailoverState(ctx, db.GetAgentFailoverStateParams{AgentID: a.ID, WorkspaceID: a.WorkspaceID})
 		}
