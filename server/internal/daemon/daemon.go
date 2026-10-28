@@ -255,6 +255,7 @@ const (
 // reportTerminalTask gives the durable outbox one insertion point without
 // revisiting every task exit when it is added.
 type terminalTaskReport struct {
+	nativeQuota    agent.NativeQuotaObservation
 	kind           terminalTaskReportKind
 	taskID         string
 	output         string
@@ -6243,6 +6244,7 @@ func (d *Daemon) reportTaskResult(ctx context.Context, taskID string, result Tas
 			kind:           terminalTaskReportFail,
 			taskID:         taskID,
 			errorMessage:   result.Comment,
+			nativeQuota:    taskNativeQuota(result),
 			sessionID:      result.SessionID,
 			workDir:        result.WorkDir,
 			durableWorkDir: result.DurableWorkDir,
@@ -6355,7 +6357,7 @@ func (d *Daemon) sendTerminalTaskReport(ctx context.Context, report terminalTask
 	case terminalTaskReportComplete:
 		return d.client.completeTaskWithRetrySchedule(ctx, report.taskID, report.output, report.branchName, report.sessionID, report.workDir, report.sessionRolloutMissing, report.retiredSessionID, report.durableWorkDir, schedule)
 	case terminalTaskReportFail:
-		return d.client.failTaskWithRetrySchedule(ctx, report.taskID, report.errorMessage, report.sessionID, report.workDir, report.branchName, report.failureReason, report.sessionRolloutMissing, report.retiredSessionID, report.durableWorkDir, schedule)
+		return d.client.failTaskWithRetrySchedule(ctx, report, schedule)
 	default:
 		return fmt.Errorf("unsupported terminal task report kind %d", report.kind)
 	}
@@ -8901,6 +8903,10 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	// Capture before a missing rollout withholds the resume pointer. The native
 	// failure still belongs to this run even when its session cannot be resumed.
 	nativeQuotaReason := nativeQuotaFailureReason(provider, result)
+	var nativeQuota agent.NativeQuotaObservation
+	if nativeQuotaReason != "" {
+		nativeQuota = *result.NativeQuota
+	}
 	var sessionRolloutMissing bool
 	if result.SessionID != "" && !codexSessionResumable(env.CodexHome, result.SessionID, codexRolloutFlushWait) {
 		taskLog.Warn("codex session rollout not present in task CODEX_HOME; withholding resume pointer and flagging continuity gap",
@@ -9102,6 +9108,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		errMsg = annotateHermesProviderUnconfigured(errMsg, provider, env.HermesHome != "")
 		errMsg = annotateCodexRetiredCompaction(errMsg, provider)
 		return TaskResult{
+			NativeQuota:   nativeQuota,
 			Status:        "blocked",
 			Comment:       errMsg,
 			SessionID:     result.SessionID,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
+	"github.com/multica-ai/multica/server/pkg/agent"
 	"github.com/multica-ai/multica/server/pkg/remotemcp"
 )
 
@@ -298,6 +299,8 @@ type TaskUsageEntry struct {
 
 // TaskResult is the outcome of executing a task.
 type TaskResult struct {
+	NativeQuota agent.NativeQuotaObservation `json:"-"` // source event, never a resume pointer or routing capability
+
 	Status     string `json:"status"`
 	Comment    string `json:"comment"`
 	BranchName string `json:"branch_name,omitempty"`

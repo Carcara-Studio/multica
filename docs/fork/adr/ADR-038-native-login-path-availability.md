@@ -71,6 +71,11 @@ configuration/route resolution, every writer/claim/retry, quota settlement and
 isolated primary probes before enabling this mode. No partial slice closes R4.
 No new auth service, generic executor or account-health subsystem is introduced.
 
+[Native callback transport](../NATIVE_QUOTA_TRANSPORT.md) preserves the optional
+observation through the terminal outbox and correlates diagnostics using existing
+daemon credential scope. Correlation may veto a network retry but is not accepted
+route/configuration evidence. No availability transition or probe is enabled.
+
 Protocol source inspected: OpenAI Codex commit
 `b412ff32c417f855c2b2d1581b77058eed87c84b`,
 `codex-rs/app-server-protocol/src/protocol/v2/{shared,notification,thread_data}.rs`.
