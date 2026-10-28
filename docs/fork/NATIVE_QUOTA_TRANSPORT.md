@@ -32,12 +32,20 @@ their optional observation is inconclusive while ordinary failure handling stays
 compatible. No broker credential is repurposed or stored, and no WS/auth protocol
 is added. Any future WS lane must use the real RuntimeConnectionScope.
 
-A correlated native report can narrow the failure reason to the existing quota
-category, preventing a conflicting text-based network retry. It cannot create a
-retry. A bounded source diagnostic is logged only after the first successful
+A preflight only carries optional source facts into the terminal transaction.
+The existing failure UPDATE rechecks running status, the actual selected runtime,
+Codex provider, daemon and Agent/runtime workspace in its statement snapshot
+before narrowing the stored reason to quota. A stale source retains the ordinary
+reason and retry policy. Subsequent retry, session and chat decisions use the
+stored reason; supported native quota cannot replay a conflicting network failure.
+The retry overlay is still prepared before the transaction, without network I/O
+under terminal locks. This adds no new lock order or availability transition.
+
+A bounded source diagnostic is logged only after the first successful
 terminal transition. Duplicate terminal callbacks cannot publish a new source
 event. The original error text is preserved.
 
+The SQL snapshot does not lock runtime/owner/configuration for future execution.
 This transport snapshot is not current owner/configuration/model authorization,
 provider-side cryptographic proof or durable accepted routing evidence. Source
 lookup failure discards the optional diagnostic rather than blocking ordinary
