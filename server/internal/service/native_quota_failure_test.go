@@ -39,7 +39,7 @@ func TestNativeQuotaFailureUsesTerminalWriteSource(t *testing.T) {
 			case "changed provider":
 				f.Exec(t, `UPDATE agent_runtime SET provider='opencode' WHERE id=$1`, runtime)
 			case "changed task runtime":
-				other := f.Runtime(t, "Replacement", testutil.Cols{"provider": "codex", "daemon_id": "quota-terminal"})
+				other := f.Runtime(t, "Replacement", testutil.Cols{"provider": "codex", "daemon_id": "replacement-daemon"})
 				f.Exec(t, `UPDATE agent_task_queue SET runtime_id=$2 WHERE id=$1`, taskID, other)
 				f.Cleanup(t, `UPDATE agent_task_queue SET runtime_id=$2 WHERE id=$1`, taskID, runtime)
 			case "foreign workspace":
