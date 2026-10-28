@@ -260,6 +260,13 @@ func TestProtectedTargetConcurrentEditsAndDispatchedProbe(t *testing.T) {
 	f, m, a, in := managementFixture(t)
 	v := saveManaged(t, m, a, in)
 	f.row = storedState(t, f.q, f)
+	c := storedConfig(t, f.q, db.AgentFallbackConfig{AgentID: in.AgentID, WorkspaceID: a.WorkspaceID})
+	f.task = targetTask(t, f, f.runtime)
+	if _, err := recordRoute(t.Context(), f.q, f, c, f.task, "primary"); err != nil {
+		t.Fatal(err)
+	}
+	f.fx.Exec(t, `UPDATE agent_task_queue SET status='running',started_at=clock_timestamp() WHERE id=$1`, f.task)
+	f.fx.Exec(t, `UPDATE agent_task_queue SET status='failed',completed_at=clock_timestamp(),failure_reason='agent_error.provider_quota_limit' WHERE id=$1`, f.task)
 	s, err := f.activate(t.Context(), f.q)
 	if err != nil {
 		t.Fatal(err)
