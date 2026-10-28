@@ -291,6 +291,18 @@ func TestTaskFailureClassifiers(t *testing.T) {
 	}
 }
 
+func TestNativeQuotaReasonRemainsNonRetryable(t *testing.T) {
+	for _, diagnostic := range []string{"connection closed mid-response", "auth method could not be resolved", "message content must be non-empty"} {
+		reason := taskfailure.NormalizeDaemonReason(taskfailure.ReasonAgentProviderQuotaLimit.String(), diagnostic).String()
+		if reason != taskfailure.ReasonAgentProviderQuotaLimit.String() || retryableReasons[reason] {
+			t.Fatalf("native quota reason normalized to %q (retry=%v) for %q", reason, retryableReasons[reason], diagnostic)
+		}
+		if resumeUnsafeFailureReason(reason) {
+			t.Fatalf("quota must not retire the session: %q", reason)
+		}
+	}
+}
+
 // TestRuntimeCLITimeoutIsNotAutoRetried pins the retry posture for #7112. A
 // local runtime CLI that missed its preparation deadline is not transient: the
 // same host runs the same CLI on the next attempt and takes the same 8-11s to
