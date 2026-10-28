@@ -27,8 +27,19 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 	if cli == "" || !filepath.IsAbs(cli) {
 		t.Fatal("MULTICA_CODEX_PROBE_CLI must explicitly name an absolute native CLI path")
 	}
-	for _, isolated := range []bool{false, true} {
-		t.Run(fmt.Sprintf("isolated=%v", isolated), func(t *testing.T) {
+	for _, tc := range []struct {
+		name                                                                 string
+		isolated, capabilityRich, shellControl, modelTools, ceiling, success bool
+		wantTools                                                            []string
+	}{
+		{name: "goal_skill_control"},
+		{name: "isolated", isolated: true},
+		{name: "shell_capable", isolated: true, capabilityRich: true},
+		{name: "shell_control", isolated: true, capabilityRich: true, shellControl: true, wantTools: []string{"exec_command", "write_stdin"}},
+		{name: "model_tools_control", isolated: true, capabilityRich: true, modelTools: true, wantTools: []string{"apply_patch", "request_user_input_async"}},
+		{name: "catalog_ceiling", isolated: true, capabilityRich: true, modelTools: true, ceiling: true, success: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			home, cwd := filepath.Join(root, "home"), filepath.Join(root, "workspace")
 			for _, dir := range []string{home, cwd} {
@@ -44,7 +55,30 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			}
 			write(filepath.Join(cwd, "AGENTS.md"), "PROBE_PROJECT_CANARY_8F32")
 			catalog := filepath.Join(root, "catalog.json")
-			write(catalog, codexProbeCaptureCatalog)
+			modelCatalog := codexProbeCaptureCatalog
+			if tc.capabilityRich {
+				modelCatalog = strings.NewReplacer(
+					`"shell_type":"disabled"`, `"shell_type":"unified_exec"`,
+					`"supports_search_tool":false`, `"supports_search_tool":true`,
+					`"node_repl_disabled":true`, `"node_repl_disabled":false`,
+					`"include_skills_usage_instructions":false`, `"include_skills_usage_instructions":true`,
+					`"include_plugin_usage_instructions":false`, `"include_plugin_usage_instructions":true`,
+					`"include_apps_usage_instructions":false`, `"include_apps_usage_instructions":true`,
+				).Replace(modelCatalog)
+			}
+			if tc.modelTools {
+				modelCatalog = strings.NewReplacer(
+					`"apply_patch_tool_type":null`, `"apply_patch_tool_type":"freeform"`,
+					`"experimental_supported_tools":[]`, `"experimental_supported_tools":["clock","request_user_input_async","send_message_to_user_async"]`,
+				).Replace(modelCatalog)
+			}
+			if tc.ceiling {
+				modelCatalog = strings.NewReplacer(
+					`"apply_patch_tool_type":"freeform"`, `"apply_patch_tool_type":null`,
+					`"experimental_supported_tools":["clock","request_user_input_async","send_message_to_user_async"]`, `"experimental_supported_tools":[]`,
+				).Replace(modelCatalog)
+			}
+			write(catalog, modelCatalog)
 			instructions := filepath.Join(root, "instructions.txt")
 			write(instructions, "Reply OK.")
 			requests := make(chan []byte, 8)
@@ -58,14 +92,22 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 				default:
 					t.Error("unexpected request retries")
 				}
+				if tc.success {
+					w.Header().Set("Content-Type", "text/event-stream")
+					_, _ = io.WriteString(w, codexProbeCaptureSuccess)
+					return
+				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = io.WriteString(w, `{"error":{"type":"invalid_request_error","message":"MOCK_CAPTURE_ONLY"}}`)
 			}))
 			defer server.Close()
 			config := fmt.Sprintf(codexProbeCaptureConfig, filepath.ToSlash(catalog), filepath.ToSlash(instructions), server.URL)
-			if isolated {
+			if tc.isolated {
 				config += "\ngoals = false\n\n[skills]\ninclude_instructions = false\n[skills.bundled]\nenabled = false\n"
+			}
+			if tc.shellControl {
+				config = strings.Replace(config, "shell_tool = false", "shell_tool = true", 1)
 			}
 			write(filepath.Join(home, "config.toml"), config)
 			// No inherited tokens, proxies, provider overrides or real CODEX_HOME.
@@ -79,14 +121,21 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			defer cancel()
 			version := exec.CommandContext(ctx, cli, "--version")
 			version.Env = env
+			version.Dir = cwd
 			out, err := version.Output()
 			if err != nil || strings.TrimSpace(string(out)) != "codex-cli 0.156.1" {
 				t.Fatalf("capture contract is pinned to Codex0.156.1: %q (%v)", out, err)
 			}
-			cmd := exec.CommandContext(ctx, cli, "exec", "--ephemeral", "--skip-git-repo-check", "--strict-config", "-C", cwd, "Reply OK.")
+			cmd := exec.CommandContext(ctx, cli, "exec", "--json", "--ephemeral", "--skip-git-repo-check", "--strict-config", "-C", cwd, "Reply OK.")
 			cmd.Env = env
-			out, err = cmd.CombinedOutput()
-			if ctx.Err() != nil || err == nil || !strings.Contains(string(out), "MOCK_CAPTURE_ONLY") {
+			cmd.Dir = cwd
+			out, err = cmd.Output()
+			if tc.success {
+				if ctx.Err() != nil || err != nil {
+					t.Fatalf("native CLI did not complete the synthetic response: %v", err)
+				}
+				assertCodexProbeCaptureCompletion(t, out)
+			} else if ctx.Err() != nil || err == nil || !strings.Contains(string(out), "MOCK_CAPTURE_ONLY") {
 				t.Fatalf("expected deliberate local provider rejection, got %v: %s", err, out)
 			}
 			if len(requests) != 1 {
@@ -110,9 +159,17 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			if request.Model != "probe-isolation-fixture" || request.Instructions != "Reply OK." || strings.Contains(string(raw), "PROBE_PROJECT_CANARY_8F32") {
 				t.Fatal("unexpected model/instructions or leaked project canary")
 			}
-			if isolated {
-				if len(request.Tools) != 0 || len(request.Input) != 1 || request.Input[0].Role != "user" || len(request.Input[0].Content) != 1 || request.Input[0].Content[0].Text != "Reply OK." {
+			if tc.isolated {
+				if (len(tc.wantTools) == 0 && len(request.Tools) != 0) || len(request.Input) != 1 || request.Input[0].Role != "user" || len(request.Input[0].Content) != 1 || request.Input[0].Content[0].Text != "Reply OK." {
 					t.Fatalf("isolation violated: %d tools, %d input messages", len(request.Tools), len(request.Input))
+				}
+				if len(tc.wantTools) > 0 {
+					toolJSON, _ := json.Marshal(request.Tools)
+					for _, name := range tc.wantTools {
+						if !strings.Contains(string(toolJSON), `"name":"`+name+`"`) {
+							t.Fatalf("negative control did not expose %s", name)
+						}
+					}
 				}
 			} else if len(request.Tools) == 0 || !strings.Contains(string(raw), "skills_instructions") {
 				t.Fatal("negative control did not expose native goal tools and skill instructions")
@@ -120,6 +177,45 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 		})
 	}
 }
+
+func assertCodexProbeCaptureCompletion(t *testing.T, output []byte) {
+	t.Helper()
+	var started, completed, answer bool
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal("invalid native JSON event", err)
+		}
+		started = started || event.Type == "turn.started"
+		completed = completed || event.Type == "turn.completed"
+		answer = answer || (event.Type == "item.completed" && event.Item.Type == "agent_message" && event.Item.Text == "OK")
+		if event.Type == "turn.failed" || event.Type == "error" {
+			t.Fatal("native CLI reported failure for synthetic success")
+		}
+	}
+	if !started || !completed || !answer {
+		t.Fatal("exit status alone did not prove native completion and final answer")
+	}
+}
+
+// Stream shape follows the pinned upstream core/tests/common/responses.rs.
+// The local producer is synthetic, not an actual successful model inference.
+const codexProbeCaptureSuccess = `event: response.created
+data: {"type":"response.created","response":{"id":"resp_probe_fixture"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","id":"msg_probe_fixture","content":[{"type":"output_text","text":"OK"}]}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_probe_fixture","usage":{"input_tokens":0,"input_tokens_details":null,"output_tokens":0,"output_tokens_details":null,"total_tokens":0}}}
+
+`
 
 // Synthetic metadata exercises the pinned CLI's tool registry; it is not a
 // claim that this fixture model exists or is eligible for production recovery.
