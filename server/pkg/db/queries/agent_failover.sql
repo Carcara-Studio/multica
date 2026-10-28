@@ -15,19 +15,41 @@ SELECT * FROM agent_failover_state
 WHERE agent_id = @agent_id AND workspace_id = @workspace_id;
 
 -- name: ActivateAgentFallbackState :one
--- Caller must prove reliable primary quota, compatible fallback and that the
--- failed task belongs to this generation. CAS forbids duplicate/stale signals.
-WITH locked AS (
-    SELECT s.* FROM agent_failover_state s
+-- Caller must hold upstream owner fences and prove reliable native quota and
+-- compatible execution. Config -> state locks and enqueue proof fence stale runs.
+WITH config AS MATERIALIZED (
+    SELECT c.* FROM agent_fallback_config c
+    WHERE c.agent_id = @agent_id AND c.workspace_id = @workspace_id
+    FOR SHARE
+), locked AS (
+    SELECT s.* FROM agent_failover_state s, config c
     WHERE s.agent_id = @agent_id AND s.workspace_id = @workspace_id
+      AND s.agent_id = c.agent_id AND s.workspace_id = c.workspace_id
       AND s.primary_generation = @primary_generation AND s.version = @expected_version
       AND s.state = 'primary_active' AND s.suspended_at IS NULL
-    FOR UPDATE
+    FOR UPDATE OF s
 ), stamp AS MATERIALIZED (SELECT clock_timestamp() AS at FROM locked), failure AS (
-    SELECT t.id, t.completed_at FROM agent_task_queue t
+    SELECT t.id, t.completed_at
+    FROM agent_task_queue t
+    JOIN agent_task_execution_route p ON p.task_id = t.id
+    JOIN agent a ON a.id = t.agent_id
+    JOIN member m ON m.user_id = a.owner_id AND m.workspace_id = a.workspace_id
+    JOIN agent_runtime pr ON pr.id = t.runtime_id
+    JOIN config c ON c.agent_id = a.id AND c.workspace_id = a.workspace_id
+    JOIN agent_runtime fr ON fr.id = c.runtime_id
+    JOIN locked s ON s.agent_id = a.id AND s.workspace_id = a.workspace_id
     WHERE t.id = @failure_task_id AND t.agent_id = @agent_id
       AND t.status = 'failed' AND t.failure_reason = 'agent_error.provider_quota_limit'
-      AND t.completed_at IS NOT NULL
+      AND t.started_at IS NOT NULL AND t.completed_at >= t.started_at
+      AND p.agent_id = a.id AND p.workspace_id = s.workspace_id AND p.runtime_id = t.runtime_id
+      AND p.route = 'primary' AND p.primary_generation = s.primary_generation
+      AND p.fallback_generation = c.generation AND p.state_version = s.version
+      AND p.created_at <= t.started_at
+      AND a.archived_at IS NULL AND a.kind = 'user' AND a.runtime_id = t.runtime_id
+      AND m.role IN ('owner', 'admin', 'member')
+      AND pr.workspace_id = a.workspace_id AND fr.workspace_id = a.workspace_id
+      AND (pr.visibility = 'public' OR (pr.visibility = 'private' AND pr.owner_id = a.owner_id))
+      AND (fr.visibility = 'public' OR (fr.visibility = 'private' AND fr.owner_id = a.owner_id))
 )
 UPDATE agent_failover_state f
 SET state = 'fallback_active', version = f.version + 1,

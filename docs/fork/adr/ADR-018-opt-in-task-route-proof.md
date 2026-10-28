@@ -75,9 +75,18 @@ and explicitly define which original target proof it inherits before enabling.
 
 ## Later integration requirements
 
-- Bind primary quota activation to the stored proof and current fallback config,
-  then apply ADR-016 reliable raw evidence. The existing low-level activation
-  primitive alone is still insufficient. Old tasks without proof cannot activate.
+- The activation persistence predicate now locks config before state and requires
+  a primary route for the actual Task/Agent/workspace/runtime, both current
+  generations and the exact enqueue state version. Refreshing the caller's CAS
+  version cannot rehabilitate an old task after recovery. It checks active user
+  Agent/owner membership and primary/fallback runtime access relationships, plus
+  route/start/failure chronology. Offline fallback is not a primary substitution.
+  These are leaf consistency checks, not a substitute for the caller's owner
+  locks, native evidence acceptance, execution compatibility or authorization.
+  No production failure path is wired to this primitive by that hardening.
+- Compose reliable typed quota evidence and compatible execution with the stored
+  proof inside the owner-fenced failure transaction. The low-level activation
+  primitive alone remains insufficient. Old tasks without proof cannot activate.
 - Revalidate route/config epochs at claim. Config edits invalidate queued opt-in
   work before launch; recovery alone does not reroute already queued fallback.
 - Preserve existing private-runtime/workspace/task authorization and session

@@ -17,7 +17,7 @@ import (
 
 func newTargetFixture(t *testing.T) (*stateFixture, db.AgentFallbackConfig) {
 	t.Helper()
-	f := newStateFixture(t)
+	f := newStateFixture(t, "queued")
 	fallback := testUUID(f.fx.Runtime(t, "Fallback"))
 	c, err := f.q.InitializeAgentFallbackConfig(t.Context(), db.InitializeAgentFallbackConfigParams{
 		AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, RuntimeID: fallback,
@@ -28,6 +28,12 @@ func newTargetFixture(t *testing.T) (*stateFixture, db.AgentFallbackConfig) {
 	}
 	f.fx.Cleanup(t, `DELETE FROM agent_fallback_config WHERE agent_id=$1`, f.row.AgentID)
 	f.fx.Cleanup(t, `DELETE FROM agent_task_execution_route WHERE agent_id=$1`, f.row.AgentID)
+	if _, err := recordRoute(t.Context(), f.q, f, c, f.task, "primary"); err != nil {
+		t.Fatal(err)
+	}
+	// Model the actual enqueue -> route proof -> launch -> failure order.
+	f.fx.Exec(t, `UPDATE agent_task_queue SET status='running',started_at=clock_timestamp() WHERE id=$1`, f.task)
+	f.fx.Exec(t, `UPDATE agent_task_queue SET status='failed',completed_at=clock_timestamp(),failure_reason='agent_error.provider_quota_limit' WHERE id=$1`, f.task)
 	return f, c
 }
 
