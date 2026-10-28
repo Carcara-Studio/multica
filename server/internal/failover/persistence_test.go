@@ -24,7 +24,7 @@ type stateFixture struct {
 	runtime, task pgtype.UUID
 }
 
-func newStateFixture(t *testing.T) *stateFixture {
+func newStateFixture(t *testing.T, taskStatus string) *stateFixture {
 	t.Helper()
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
@@ -44,7 +44,12 @@ func newStateFixture(t *testing.T) *stateFixture {
 	fx.Member(t, fx.WorkspaceID, fx.UserID, "owner")
 	runtime := fx.Runtime(t, "Primary")
 	agent := fx.Agent(t, "Failover", runtime)
-	task := fx.Task(t, agent, testutil.Cols{"runtime_id": runtime, "status": "failed", "completed_at": testutil.Raw("now()"), "failure_reason": "agent_error.provider_quota_limit"})
+	taskCols := testutil.Cols{"runtime_id": runtime, "status": taskStatus}
+	if taskStatus == "failed" {
+		taskCols["completed_at"] = testutil.Raw("now()")
+		taskCols["failure_reason"] = "agent_error.provider_quota_limit"
+	}
+	task := fx.Task(t, agent, taskCols)
 	fx.Cleanup(t, `DELETE FROM agent_failover_state WHERE agent_id=$1`, agent)
 	q := db.New(pool)
 	row, err := q.InitializeAgentFailoverState(t.Context(), db.InitializeAgentFailoverStateParams{
@@ -112,7 +117,7 @@ func wantNoTransition(t *testing.T, err error) {
 }
 
 func TestFailoverInitializationAndQuotaTaskFences(t *testing.T) {
-	f := newStateFixture(t)
+	f, _ := newTargetFixture(t)
 	ctx := t.Context()
 	_, err := f.q.InitializeAgentFailoverState(ctx, db.InitializeAgentFailoverStateParams{
 		AgentID: f.row.AgentID, WorkspaceID: f.row.WorkspaceID, PrimaryGeneration: newGeneration(),
@@ -150,7 +155,7 @@ func TestFailoverInitializationAndQuotaTaskFences(t *testing.T) {
 }
 
 func TestFallbackActivationCASAndAtomicRollback(t *testing.T) {
-	f := newStateFixture(t)
+	f, _ := newTargetFixture(t)
 	ctx := t.Context()
 	tx, err := f.pool.Begin(ctx)
 	if err != nil {
@@ -206,7 +211,7 @@ func TestFallbackActivationCASAndAtomicRollback(t *testing.T) {
 }
 
 func TestProbeClaimAndDispatchHaveSingleWinner(t *testing.T) {
-	f := newStateFixture(t)
+	f, _ := newTargetFixture(t)
 	if _, err := f.activate(t.Context(), f.q); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +279,7 @@ func TestProbeClaimAndDispatchHaveSingleWinner(t *testing.T) {
 func TestUnsuccessfulProbeRetainsFallback(t *testing.T) {
 	for _, outcome := range []string{"agent_error.provider_quota_limit", "agent_error.provider_capacity_or_rate_limit", "agent_error.provider_network", "agent_error.provider_auth_or_access", "agent_error.provider_server_error", "agent_error.context_overflow", "probe_timeout", "unknown"} {
 		t.Run(outcome, func(t *testing.T) {
-			f := newStateFixture(t)
+			f, _ := newTargetFixture(t)
 			probe := f.probe(t)
 			if _, err := f.dispatch(t.Context(), f.q, probe); err != nil {
 				t.Fatal(err)
@@ -291,7 +296,7 @@ func TestUnsuccessfulProbeRetainsFallback(t *testing.T) {
 }
 
 func TestProbeLeaseExpiryAndStaleGeneration(t *testing.T) {
-	f := newStateFixture(t)
+	f, _ := newTargetFixture(t)
 	probe := f.probe(t)
 	f.fx.Exec(t, `UPDATE agent_failover_state SET last_probe_at=clock_timestamp()-interval '3 minutes', probe_lease_until=clock_timestamp()-interval '1 minute' WHERE agent_id=$1`, probe.AgentID)
 	_, err := f.dispatch(t.Context(), f.q, probe)
@@ -336,7 +341,7 @@ func TestProbeLeaseExpiryAndStaleGeneration(t *testing.T) {
 func TestProbeSuspensionArchiveAndWorkspaceFences(t *testing.T) {
 	for _, mode := range []string{"suspend", "archive", "delete", "runtime_rebind", "workspace"} {
 		t.Run(mode, func(t *testing.T) {
-			f := newStateFixture(t)
+			f, _ := newTargetFixture(t)
 			p := f.probe(t)
 			if _, err := f.dispatch(t.Context(), f.q, p); err != nil {
 				t.Fatal(err)
@@ -367,7 +372,7 @@ func TestProbeSuspensionArchiveAndWorkspaceFences(t *testing.T) {
 }
 
 func TestProbeSettlementRechecksLeaseAfterLockWait(t *testing.T) {
-	f := newStateFixture(t)
+	f, _ := newTargetFixture(t)
 	p := f.probe(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

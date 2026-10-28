@@ -20,7 +20,7 @@ import (
 
 func managementFixture(t *testing.T) (*stateFixture, ConfigManager, ManagementActor, SaveTargetConfig) {
 	t.Helper()
-	f := newStateFixture(t)
+	f := newStateFixture(t, "failed")
 	runtime := testUUID(f.fx.Runtime(t, "Protected fallback", testutil.Cols{"provider": "claude"}))
 	f.fx.Cleanup(t, `DELETE FROM agent_fallback_config WHERE agent_id=$1`, f.row.AgentID)
 	f.fx.Cleanup(t, `DELETE FROM agent_task_execution_route WHERE agent_id=$1`, f.row.AgentID)
