@@ -9,7 +9,7 @@ independently authorize additional delivery work.
 
 ## Fixed scope and completion criteria
 
-R1 is delivered by #98 / PR #99, R2 by #100 / PR #101 and R3 by #102 / PR #103; R4 remains blocked; R5 passed its bounded Windows/account and accepted upstream-baseline criteria on 2026-10-27. A helper, audit, mock test
+R1 is delivered by #98 / PR #99, R2 by #100 / PR #101 and R3 by #102 / PR #103; R4 is in implementation and remains disabled; R5 passed its bounded Windows/account and accepted upstream-baseline criteria on 2026-10-27. A helper, audit, mock test
 or foundation PR alone is not completion of an item. Maintain evidence here as
 work lands; do not replace these identifiers with new phases.
 

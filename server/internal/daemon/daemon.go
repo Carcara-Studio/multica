@@ -8898,6 +8898,9 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	// loss (PriorSessionResumeUnavailable, MUL-4424 transparency) even while
 	// resuming that older good session. No-op for non-Codex providers
 	// (env.CodexHome == "") and when there is no session.
+	// Capture before a missing rollout withholds the resume pointer. The native
+	// failure still belongs to this run even when its session cannot be resumed.
+	nativeQuotaReason := nativeQuotaFailureReason(provider, result)
 	var sessionRolloutMissing bool
 	if result.SessionID != "" && !codexSessionResumable(env.CodexHome, result.SessionID, codexRolloutFlushWait) {
 		taskLog.Warn("codex session rollout not present in task CODEX_HOME; withholding resume pointer and flagging continuity gap",
@@ -9041,7 +9044,10 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		// classifier a corrupt image or oversized payload baked into the
 		// conversation permanently blocks the issue: every follow-up
 		// task resumes the same poisoned session and hits the same 400.
-		failureReason, _ := classifyPoisonedError(errMsg)
+		failureReason := nativeQuotaReason
+		if failureReason == "" {
+			failureReason, _ = classifyPoisonedError(errMsg)
+		}
 		if failureReason == "" {
 			// A resume we could not read back leaves the same oversized thread
 			// recorded as this issue's resume pointer. Reaching here means the
@@ -9069,11 +9075,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 				retiredSessionID = task.PriorSessionID
 			}
 		}
-		if failureReason != "" {
+		if failureReason != "" && nativeQuotaReason == "" {
 			taskLog.Warn("agent failed with a resume-unsafe error, retiring the session",
 				"failure_reason", failureReason,
 			)
-		} else {
+		} else if failureReason == "" {
 			// MUL-2946: classifyPoisonedError only matches the
 			// session-poisoning Anthropic 400 shape. Everything else
 			// falls through to taskfailure.Classify, which maps the
@@ -9146,6 +9152,9 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 //     attempts, so a retry after real work re-plans on top of its own
 //     half-finished commits.
 func shouldRetryWithFreshSession(result agent.Result, priorSessionID string, tools int32, provider string) bool {
+	if nativeQuotaFailureReason(provider, result) != "" {
+		return false
+	}
 	if result.Status != "failed" || priorSessionID == "" || tools > 0 {
 		return false
 	}
