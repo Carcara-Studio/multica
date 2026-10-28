@@ -36,6 +36,10 @@ func TestNativeLoginPathMigrationDefaultsAndGuardedDowngrade(t *testing.T) {
 	if _, err := pool.Exec(t.Context(), `UPDATE agent_fallback_config SET native_login_path=true WHERE agent_id=$1`, id); err != nil {
 		t.Fatal(err)
 	}
+	// Resolve the table itself, not current_schema(): a user's first schema
+	// may exist without owning the table in the next search_path entry.
+	empty := createScratchSchema(t, t.Context(), base, "native_empty_")
+	pool = openTestPoolWithSearchPath(t, empty+","+schema)
 	if err := run("down", version); err == nil {
 		t.Fatal("downgrade silently converted native configuration to strict")
 	}
