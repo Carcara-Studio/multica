@@ -70,6 +70,10 @@ type UpdateAgentEnvRequest struct {
 // Returns the loaded agent and the authenticated member on success.
 // All non-2xx branches write their own response and return ok=false.
 func (h *Handler) authorizeAgentEnv(w http.ResponseWriter, r *http.Request) (db.Agent, db.Member, bool) {
+	return h.authorizeAgentPrivateConfig(w, r, "env")
+}
+
+func (h *Handler) authorizeAgentPrivateConfig(w http.ResponseWriter, r *http.Request, surface string) (db.Agent, db.Member, bool) {
 	agentID := chi.URLParam(r, "id")
 	agent, ok := h.loadAgentForUser(w, r, agentID)
 	if !ok {
@@ -85,7 +89,7 @@ func (h *Handler) authorizeAgentEnv(w http.ResponseWriter, r *http.Request) (db.
 	// cannot be tricked by a member-supplied header.
 	actorType, _ := h.resolveActor(r, userID, workspaceID)
 	if actorType == "agent" {
-		writeError(w, http.StatusForbidden, "agents may not access env management endpoints")
+		writeError(w, http.StatusForbidden, "agents may not access "+surface+" management endpoints")
 		return db.Agent{}, db.Member{}, false
 	}
 
@@ -94,7 +98,7 @@ func (h *Handler) authorizeAgentEnv(w http.ResponseWriter, r *http.Request) (db.
 		return db.Agent{}, db.Member{}, false
 	}
 	if !agentsecrets.CanManage(agent, member) {
-		writeError(w, http.StatusForbidden, "only the agent owner or a workspace owner/admin can manage this agent's env")
+		writeError(w, http.StatusForbidden, "only the agent owner or a workspace owner/admin can manage this agent's "+surface)
 		return db.Agent{}, db.Member{}, false
 	}
 

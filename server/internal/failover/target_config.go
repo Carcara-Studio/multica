@@ -58,8 +58,8 @@ type configTxStarter interface {
 	Begin(context.Context) (pgx.Tx, error)
 }
 
-// ConfigManager is an internal management boundary only. It has no endpoint,
-// executor, transport, automatic enablement or capability approval. The caller
+// ConfigManager is a management boundary, not an executor, automatic enablement
+// or capability approval. Protected HTTP management reuses these checks. The caller
 // supplies the authenticated target runtime's catalog; unknown metadata may be
 // stored for later validation, never treated as executable readiness.
 type ConfigManager struct {
@@ -291,26 +291,39 @@ func (m ConfigManager) Save(ctx context.Context, actor ManagementActor, in SaveT
 }
 
 func (m ConfigManager) Inspect(ctx context.Context, actor ManagementActor, id pgtype.UUID) (ConfigView, error) {
+	v, configured, err := m.InspectStatus(ctx, actor, id)
+	if err == nil && !configured {
+		return ConfigView{}, ErrTargetUnavailable
+	}
+	return v, err
+}
+
+// InspectStatus retains the state-only revision after configuration removal.
+// A client needs it to recreate policy without discarding availability history.
+func (m ConfigManager) InspectStatus(ctx context.Context, actor ManagementActor, id pgtype.UUID) (ConfigView, bool, error) {
 	tx, q, a, err := m.begin(ctx, actor, id, pgtype.UUID{})
 	if err != nil {
-		return ConfigView{}, err
+		return ConfigView{}, false, err
 	}
 	defer tx.Rollback(ctx)
 	c, s, hc, hs, err := loadTargetConfig(ctx, q, a)
 	if err != nil {
-		return ConfigView{}, err
+		return ConfigView{}, false, err
 	}
-	if !hc || !hs {
-		return ConfigView{}, ErrTargetUnavailable
+	if hc && !hs {
+		return ConfigView{}, false, ErrTargetUnavailable
 	}
-	v, err := configView(c, s)
-	if err != nil {
-		return ConfigView{}, err
+	v := ConfigView{AgentID: a.ID, Revision: revision(c, s, hc, hs)}
+	if hc {
+		v, err = configView(c, s)
+		if err != nil {
+			return ConfigView{}, false, err
+		}
 	}
 	if tx.Commit(ctx) != nil {
-		return ConfigView{}, ErrTargetStore
+		return ConfigView{}, false, ErrTargetStore
 	}
-	return v, nil
+	return v, hc, nil
 }
 
 func (m ConfigManager) Reveal(ctx context.Context, actor ManagementActor, id pgtype.UUID) (ExecutionOverrides, error) {

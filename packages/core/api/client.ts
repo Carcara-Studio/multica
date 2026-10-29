@@ -1,4 +1,5 @@
 import { hierarchyEscalationPageSchema, type HierarchyEscalationPage } from "./hierarchy-escalation-schema";
+import { agentFallbackSchema, type AgentFallbackResponse, type FallbackRevision, type SaveAgentFallbackRequest } from "./agent-fallback-schema";
 import type { ZodType } from "zod";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
 import type { WorkspaceWakeupPage, WorkspaceWakeupFilters } from "../types/issue-wakeup";
@@ -1997,6 +1998,25 @@ export class ApiClient {
    */
   async getAgentEnv(id: string): Promise<AgentEnvResponse> {
     return this.fetch(`/api/agents/${id}/env`);
+  }
+
+  /** Stored intent only; this contract cannot enable fallback execution. */
+  async getAgentFallback(id: string): Promise<AgentFallbackResponse> {
+    const raw = await this.fetch<unknown>(`/api/agents/${encodeURIComponent(id)}/fallback`);
+    const reply = parseWithFallback<AgentFallbackResponse | null>(raw, agentFallbackSchema, null, { endpoint: "getAgentFallback" });
+    if (!reply) throw new Error("Could not load fallback configuration");
+    return reply;
+  }
+
+  async saveAgentFallback(id: string, data: SaveAgentFallbackRequest): Promise<AgentFallbackResponse> {
+    const raw = await this.fetch<unknown>(`/api/agents/${encodeURIComponent(id)}/fallback`, { method: "PUT", body: JSON.stringify(data) });
+    const reply = parseWithFallback<AgentFallbackResponse | null>(raw, agentFallbackSchema, null, { endpoint: "saveAgentFallback" });
+    if (!reply || !reply.configured || reply.configuration?.mode !== data.mode) throw new Error("Could not confirm fallback configuration");
+    return reply;
+  }
+
+  async deleteAgentFallback(id: string, expectedRevision: FallbackRevision): Promise<void> {
+    await this.fetch<void>(`/api/agents/${encodeURIComponent(id)}/fallback`, { method: "DELETE", body: JSON.stringify({ expected_revision: expectedRevision }) });
   }
 
   /**
