@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,8 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 		name                                                                 string
 		isolated, capabilityRich, shellControl, modelTools, ceiling, success bool
 		wantTools                                                            []string
+		hookSource                                                           string
+		hookControl                                                          bool
 	}{
 		{name: "goal_skill_control"},
 		{name: "isolated", isolated: true},
@@ -38,8 +41,15 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 		{name: "shell_control", isolated: true, capabilityRich: true, shellControl: true, wantTools: []string{"exec_command", "write_stdin"}},
 		{name: "model_tools_control", isolated: true, capabilityRich: true, modelTools: true, wantTools: []string{"apply_patch", "request_user_input_async"}},
 		{name: "catalog_ceiling", isolated: true, capabilityRich: true, modelTools: true, ceiling: true, success: true},
+		{name: "user_hook_control", isolated: true, hookSource: "user", hookControl: true},
+		{name: "user_hook_blocked", isolated: true, hookSource: "user"},
+		{name: "project_hook_control", isolated: true, hookSource: "project", hookControl: true},
+		{name: "project_hook_blocked", isolated: true, hookSource: "project"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.hookSource != "" && runtime.GOOS != "windows" {
+				t.Skip("command hook fixture explicitly exercises the Windows shell")
+			}
 			root := t.TempDir()
 			home, cwd := filepath.Join(root, "home"), filepath.Join(root, "workspace")
 			for _, dir := range []string{home, cwd} {
@@ -54,6 +64,27 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 				}
 			}
 			write(filepath.Join(cwd, "AGENTS.md"), "PROBE_PROJECT_CANARY_8F32")
+			hookMarker := filepath.Join(root, "hook-ran.txt")
+			if tc.hookSource != "" {
+				hookDir := home
+				if tc.hookSource == "project" {
+					hookDir = filepath.Join(cwd, ".codex")
+					for _, dir := range []string{hookDir, filepath.Join(cwd, ".git", "objects"), filepath.Join(cwd, ".git", "refs")} {
+						if err := os.MkdirAll(dir, 0700); err != nil {
+							t.Fatal(err)
+						}
+					}
+					write(filepath.Join(cwd, ".git", "HEAD"), "ref: refs/heads/main\n")
+					write(filepath.Join(cwd, ".git", "config"), "[core]\nrepositoryformatversion = 0\nbare = false\n")
+					write(filepath.Join(hookDir, "config.toml"), "[features]\nhooks = true\n")
+				}
+				command := fmt.Sprintf(`[System.IO.File]::WriteAllText('%s', 'PROBE_HOOK_RAN'); Write-Output 'PROBE_HOOK_CONTEXT_6B91'`, strings.ReplaceAll(hookMarker, "'", "''"))
+				hooks, err := json.Marshal(map[string]any{"hooks": map[string]any{"SessionStart": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command, "commandWindows": command, "timeout": 5}}}}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				write(filepath.Join(hookDir, "hooks.json"), string(hooks))
+			}
 			catalog := filepath.Join(root, "catalog.json")
 			modelCatalog := codexProbeCaptureCatalog
 			if tc.capabilityRich {
@@ -83,6 +114,16 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			write(instructions, "Reply OK.")
 			requests := make(chan []byte, 8)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.hookSource != "" {
+					marker, err := os.ReadFile(hookMarker)
+					if tc.hookControl {
+						if err != nil || strings.TrimSpace(string(marker)) != "PROBE_HOOK_RAN" {
+							t.Error("positive hook marker missing before provider request")
+						}
+					} else if !os.IsNotExist(err) {
+						t.Error("hook marker exists or cannot be checked before provider request")
+					}
+				}
 				body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 				if err != nil || r.Method != http.MethodPost || r.URL.Path != "/v1/responses" {
 					t.Errorf("unexpected local request: %s %s (%v)", r.Method, r.URL.Path, err)
@@ -109,6 +150,13 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			if tc.shellControl {
 				config = strings.Replace(config, "shell_tool = false", "shell_tool = true", 1)
 			}
+			if tc.hookSource != "" {
+				config = strings.Replace(config, "hooks = false\n", "hooks = true\n", 1)
+				if tc.hookSource == "project" {
+					// The pinned Windows trust lookup uses the native path spelling.
+					config += fmt.Sprintf("\n[projects.%q]\ntrust_level = \"trusted\"\n", cwd)
+				}
+			}
 			write(filepath.Join(home, "config.toml"), config)
 			// No inherited tokens, proxies, provider overrides or real CODEX_HOME.
 			env := []string{"CODEX_HOME=" + home, "HOME=" + home, "USERPROFILE=" + home, "RUST_LOG=error"}
@@ -120,13 +168,25 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 			defer cancel()
 			version := exec.CommandContext(ctx, cli, "--version")
+			version.WaitDelay = 2 * time.Second
 			version.Env = env
 			version.Dir = cwd
 			out, err := version.Output()
 			if err != nil || strings.TrimSpace(string(out)) != "codex-cli 0.156.1" {
 				t.Fatalf("capture contract is pinned to Codex0.156.1: %q (%v)", out, err)
 			}
-			cmd := exec.CommandContext(ctx, cli, "exec", "--json", "--ephemeral", "--skip-git-repo-check", "--strict-config", "-C", cwd, "Reply OK.")
+			args := []string{"exec", "--json", "--ephemeral", "--skip-git-repo-check", "--strict-config", "-C", cwd}
+			if tc.hookSource != "" {
+				// Trust only test-created synthetic hooks for this invocation. Both
+				// controls use the bypass so missing trust cannot explain suppression.
+				args = append(args, "--dangerously-bypass-hook-trust")
+				if !tc.hookControl {
+					args = append(args, "-c", "features.hooks=false")
+				}
+			}
+			args = append(args, "Reply OK.")
+			cmd := exec.CommandContext(ctx, cli, args...)
+			cmd.WaitDelay = 2 * time.Second
 			cmd.Env = env
 			cmd.Dir = cwd
 			out, err = cmd.Output()
@@ -142,6 +202,16 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 				t.Fatalf("captured %d requests, want exactly one", len(requests))
 			}
 			raw := <-requests
+			if tc.hookSource != "" {
+				_, markerErr := os.Stat(hookMarker)
+				if tc.hookControl {
+					if markerErr != nil || !strings.Contains(string(raw), "PROBE_HOOK_CONTEXT_6B91") {
+						t.Fatal("positive hook control did not run and contribute context")
+					}
+				} else if !os.IsNotExist(markerErr) || strings.Contains(string(raw), "PROBE_HOOK_CONTEXT_6B91") {
+					t.Fatal("disabled hook ran or contributed context")
+				}
+			}
 			var request struct {
 				Model        string            `json:"model"`
 				Instructions string            `json:"instructions"`
@@ -159,7 +229,11 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			if request.Model != "probe-isolation-fixture" || request.Instructions != "Reply OK." || strings.Contains(string(raw), "PROBE_PROJECT_CANARY_8F32") {
 				t.Fatal("unexpected model/instructions or leaked project canary")
 			}
-			if tc.isolated {
+			if tc.hookControl {
+				if len(request.Tools) != 0 || len(request.Input) < 2 {
+					t.Fatal("hook control did not isolate other tools or add hook input")
+				}
+			} else if tc.isolated {
 				if (len(tc.wantTools) == 0 && len(request.Tools) != 0) || len(request.Input) != 1 || request.Input[0].Role != "user" || len(request.Input[0].Content) != 1 || request.Input[0].Content[0].Text != "Reply OK." {
 					t.Fatalf("isolation violated: %d tools, %d input messages", len(request.Tools), len(request.Input))
 				}
