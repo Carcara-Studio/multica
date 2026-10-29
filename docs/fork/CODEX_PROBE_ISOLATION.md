@@ -12,11 +12,12 @@ Two return synthetic SSE success, verifying native CLI JSON `turn.started`,
 `turn.completed` and the final `OK` message in addition to exit status. No actual
 model/account inference or recovery is claimed.
 
-The test uses an empty synthetic home, a synthetic model catalog, minimal base
+The test uses an empty synthetic home, a controlled model catalog, minimal base
 instructions, a fresh ephemeral session, disabled project documents and an
 environment allowlist without inherited credentials/proxies/provider overrides.
-No shared auth file is copied. The endpoint records no headers. The model name
-is a fixture, not an eligible production model or evidence of account access.
+No shared auth file is copied. The endpoint records no headers. The original
+cases use a fixture model name; bundled cases keep the exported native slug.
+Neither establishes production eligibility or evidence of account access.
 
 Twelve cases use the same native executable (the four command-hook cases are
 Windows-specific):
