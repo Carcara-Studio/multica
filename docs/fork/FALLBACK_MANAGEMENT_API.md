@@ -87,8 +87,41 @@ empty configuration; unknown future mode values remain readable as unknown.
 Revision numbers outside JavaScript's safe integer range are rejected. Secrets
 in unknown response fields are stripped before reaching consumers.
 
+## CLI management
+
+`multica agent fallback get <agent-id>` prints redacted JSON including the current
+revision and disabled execution status. It does not reveal stored override values.
+Human local profiles use the existing server/workspace/token configuration;
+daemon-managed tasks are rejected before profile lookup or HTTP access.
+
+`multica agent fallback set <agent-id> --file request.json` sends the complete PUT
+request shown above, including the revision you reviewed. Store secret-bearing
+request files privately. `--file -` reads stdin instead; for example in PowerShell:
+
+```powershell
+Get-Content -Raw request.json | multica agent fallback set <agent-id> --file -
+```
+
+There is no inline secret JSON flag, implicit revision fetch or automatic retry.
+On409, get the current revision, review the competing changes and explicitly
+prepare a replacement. A GET receipt is metadata, not a round-trippable backup
+of the full override document. Keep the intended target-local values available
+when preparing an update; a missing environment entry means removal under the
+existing replacement rules.
+
+`multica agent fallback remove <agent-id> --file remove.json` takes an object
+containing only `expected_revision` copied from GET. It reports removal after the
+server accepts it. Read again before recreation. This removes configuration;
+it does not restore primary health or enable/disable an active execution engine.
+
+Inputs are bounded to1MiB. Read/save output is restricted to typed metadata;
+malformed, enabled or contradictory save receipts fail visibly. HTTP errors keep
+their status and task-token classification but omit raw response bodies, which
+an intermediary could populate with secrets. There is no UI in this slice.
+
 Canonical HTTP tests cover lifecycle/CAS/recreation, metadata/audit redaction,
 owner/admin access, member/agent/daemon denial, bad bodies and private runtime
 rejection. Existing manager tests own transaction/concurrency/audit-failure
-semantics. Client tests own malformed-response and serialization behavior. No UI
-or CLI command is added, and this API does not complete the full R4 delivery.
+semantics. Shared client tests own response schemas; CLI httptest cases own command
+wiring, file/stdin input, metadata output, failure handling and task-context denial.
+These management surfaces do not complete the full R4 delivery.
