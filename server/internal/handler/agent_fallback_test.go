@@ -112,7 +112,7 @@ func TestAgentFallbackAPIAuthorization(t *testing.T) {
 	dbfx.Member(t, testWorkspaceID, other, "member")
 	body.ExpectedRevision = &saved.Revision
 	host := dbfx.Agent(t, "Fallback actor", testRuntimeID)
-	task := dbfx.Task(t, host)
+	task := dbfx.Task(t, host, testutil.Cols{"runtime_id": testRuntimeID})
 	for _, action := range []struct {
 		method  string
 		handler http.HandlerFunc
