@@ -2202,6 +2202,14 @@ func (h *Handler) finalizeClaimDelivery(
 	// Authorization rejected at the delivery boundary: settle through the
 	// existing failure path so the task never reaches the daemon.
 	switch authzErr.Reason {
+	case "error_execution_route_unavailable":
+		failure := h.failClaimedTaskBeforeLaunch(
+			ctx, task,
+			"This task has an execution route that this server cannot safely execute. Automatic fallback remains unavailable.",
+			taskfailure.ReasonInvalidTaskIdentity,
+			"error_execution_route_unavailable", http.StatusConflict, "task execution route is unavailable",
+		)
+		return nil, failure, nil
 	case "error_agent_runtime_changed":
 		failure := h.failClaimedTaskBeforeLaunch(
 			ctx, task,
@@ -4260,7 +4268,10 @@ func (h *Handler) StartTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		slog.Warn("start task failed", "task_id", taskID, "error", err)
-		if errors.Is(err, pgx.ErrNoRows) {
+		var routeErr *service.ClaimDeliveryAuthzError
+		if errors.As(err, &routeErr) && routeErr.Reason == "error_execution_route_unavailable" {
+			writeError(w, http.StatusConflict, "task execution route is unavailable")
+		} else if errors.Is(err, pgx.ErrNoRows) {
 			status := http.StatusConflict
 			if legacy {
 				status = http.StatusBadRequest

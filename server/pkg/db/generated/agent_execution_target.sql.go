@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const agentTaskHasExecutionRoute = `-- name: AgentTaskHasExecutionRoute :one
+SELECT EXISTS (SELECT 1 FROM agent_task_execution_route WHERE task_id = $1) AS routed
+`
+
+// Internal launch veto only; returns no route/configuration or workspace data.
+// Check any marker, including one whose historical metadata is now orphaned.
+func (q *Queries) AgentTaskHasExecutionRoute(ctx context.Context, taskID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, agentTaskHasExecutionRoute, taskID)
+	var routed bool
+	err := row.Scan(&routed)
+	return routed, err
+}
+
 const copyAgentTaskExecutionRouteForRetry = `-- name: CopyAgentTaskExecutionRouteForRetry :one
 INSERT INTO agent_task_execution_route
     (task_id, agent_id, workspace_id, runtime_id, route, primary_generation, state_version, fallback_generation)

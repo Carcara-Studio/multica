@@ -1,6 +1,9 @@
 -- name: CreateTaskToken :one
 INSERT INTO task_token (token_hash, task_id, agent_id, workspace_id, user_id, expires_at, id)
-VALUES ($1, $2, $3, $4, $5, $6, COALESCE(sqlc.narg('id')::uuid, gen_random_uuid()))
+-- Persisted execution routes require an approved resolver before credentials
+-- may be delivered. R4 has no production resolver yet, including primary routes.
+SELECT $1, $2, $3, $4, $5, $6, COALESCE(sqlc.narg('id')::uuid, gen_random_uuid())
+WHERE NOT EXISTS (SELECT 1 FROM agent_task_execution_route WHERE task_id = $2::uuid)
 RETURNING *;
 
 -- name: GetTaskTokenByHash :one

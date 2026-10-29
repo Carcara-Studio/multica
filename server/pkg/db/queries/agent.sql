@@ -961,6 +961,7 @@ SET status = 'running',
     wait_reason = NULL,
     prepare_lease_expires_at = NULL
 WHERE agent_task_queue.id = $1 AND agent_task_queue.status IN ('dispatched', 'waiting_local_directory')
+  AND NOT EXISTS (SELECT 1 FROM agent_task_execution_route route WHERE route.task_id = agent_task_queue.id)
 RETURNING *;
 
 -- name: LockAgentTaskStartClaim :one
