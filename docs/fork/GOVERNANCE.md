@@ -41,6 +41,11 @@ authorize more work. Code/tests and accepted ADRs retain architectural authority
 
 ## Protected Branch
 
+The maintainer approved the project continuity memory pilot on2026-10-29 while
+pausing R4. ADR-040/#159 and PROJECT_CONTINUITY.md record its bounded scope.
+The same issue/branch/PR/review/CI/merge/post-merge workflow applies; this approval
+does not authorize cross-project personal-memory import or resume paused R4.
+
 `main` is the protected integration branch.
 
 The active repository ruleset requires:
