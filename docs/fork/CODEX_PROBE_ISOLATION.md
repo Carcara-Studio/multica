@@ -7,18 +7,19 @@ production recovery adapter or permission to enable fallback.
 
 On Windows with the existing standalone Codex CLI 0.156.1, the opt-in
 `TestCodexProbeIsolationCapture` sends one request per case to a localhost fake
-Responses provider. Nine cases deliberately return HTTP400 `MOCK_CAPTURE_ONLY`.
-One returns synthetic SSE success, verifying native CLI JSON `turn.started`,
+Responses provider. Ten cases deliberately return HTTP400 `MOCK_CAPTURE_ONLY`.
+Two return synthetic SSE success, verifying native CLI JSON `turn.started`,
 `turn.completed` and the final `OK` message in addition to exit status. No actual
 model/account inference or recovery is claimed.
 
-The test uses an empty synthetic home, a synthetic model catalog, minimal base
+The test uses an empty synthetic home, a controlled model catalog, minimal base
 instructions, a fresh ephemeral session, disabled project documents and an
 environment allowlist without inherited credentials/proxies/provider overrides.
-No shared auth file is copied. The endpoint records no headers. The model name
-is a fixture, not an eligible production model or evidence of account access.
+No shared auth file is copied. The endpoint records no headers. The original
+cases use a fixture model name; bundled cases keep the exported native slug.
+Neither establishes production eligibility or evidence of account access.
 
-Ten cases use the same native executable (the four command-hook cases are
+Twelve cases use the same native executable (the four command-hook cases are
 Windows-specific):
 
 - Without the final goal/skill controls, the request exposes native goal tools
@@ -75,6 +76,47 @@ Without the opt-in variable, this test skips before any executable/account looku
 No global CLI installation or configuration change is needed. The `windows.mxc`
 override belongs only to the synthetic configuration; the experiment does not
 change a user's sandbox policy.
+
+## Native bundled model metadata
+
+Two additional cases obtain full metadata from the pinned native executable's
+`debug models --bundled` command. Its pinned source branch dumps the embedded
+catalog without loading config/auth or refreshing a live account catalog. The
+test chooses an explicit visible code-mode/apply-patch model from that output,
+keeps its slug and wire mode, and preserves raw metadata fields rather than the
+Multica picker projection. This is genuine bundled metadata, not proof that an
+actual Agent/account currently supports that selection. A fallback catalog must
+not become execution authority.
+
+The positive control exposes code-mode exec/wait despite feature opt-outs. The
+ceiling case removes only apply_patch_tool_type, experimental_supported_tools
+and tool_mode declarations; other metadata stays intact. Both explicitly set
+agents.enabled=false, which the pinned resolver gives precedence over a model's
+multi_agent_version. Feature flags alone do not provide that override.
+
+For the selected native Responses Lite model, tools are nested in an
+additional_tools input item and base instructions are a developer message;
+root tools/instructions are absent. The test checks that exact layout before
+checking the nested tool array, minimal instruction text and single user input.
+An absent root tools field alone must never count as zero tools. The ceiling
+requires an empty nested tool array and native completion of a synthetic stream.
+No model tool call is emitted and no real inference is claimed.
+
+## Managed startup admission remains closed
+
+Pinned ManagedFeatures::normalize_candidate applies managed feature pins before
+validation. Config construction uses that normalization; strict-config is not a
+blanket promise that conflicting startup opt-outs are rejected. The separate
+explicit-feature conflict validator is used by the inspected config-write path.
+Do not confuse that write validation with startup admission or rely on opt-outs
+alone when a managed policy may require hooks/plugins.
+
+On Windows the system requirements directory comes from the ProgramData known
+folder API, not a process ProgramData environment substitution. No system files,
+managed settings, debug-only loader overrides or real profiles were changed to
+test this. These are source findings; managed-policy rejection has not been
+established by the synthetic native captures. Same-process admission before any
+hook/plugin/MCP startup remains a required dependency for a real probe.
 
 ## Synthetic startup introspection
 
@@ -143,6 +185,17 @@ The automatic fallback and probe schedulers remain disabled.
 The internal extension ToolPolicy is not itself a public thread/turn parameter.
 The capture tests the available startup configuration instead of asserting that
 an internal policy can be supplied by the Multica daemon.
+
+The bundled export and startup findings follow pinned `cli/src/main.rs`
+run_debug_models_command, `core/src/config/managed_features.rs`,
+`core/src/config/mod.rs`, `app-server/src/config_manager_service.rs` and
+`config/src/loader/mod.rs`. Model-owned tool mode and agent defaults follow
+`core/src/tools/mod.rs` and Config::multi_agent_version_override. The Lite input
+layout is pinned by `core/tests/suite/responses_lite.rs` and
+`protocol/src/models.rs` AdditionalTools. Current documentation was also read at
+[app-server](https://learn.chatgpt.com/docs/app-server) and
+[configuration](https://learn.chatgpt.com/docs/config-file/config-reference);
+the implementation contract remains version-bound.
 
 The Windows hook controls cover ordinary user/project command hooks in the
 pinned executable. They do not establish suppression of managed/required hooks,

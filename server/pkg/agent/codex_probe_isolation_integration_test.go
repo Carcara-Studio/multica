@@ -34,6 +34,7 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 		wantTools                                                            []string
 		hookSource                                                           string
 		hookControl                                                          bool
+		bundled                                                              bool
 	}{
 		{name: "goal_skill_control"},
 		{name: "isolated", isolated: true},
@@ -45,6 +46,8 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 		{name: "user_hook_blocked", isolated: true, hookSource: "user"},
 		{name: "project_hook_control", isolated: true, hookSource: "project", hookControl: true},
 		{name: "project_hook_blocked", isolated: true, hookSource: "project"},
+		{name: "bundled_model_control", isolated: true, bundled: true, wantTools: []string{"exec", "wait"}},
+		{name: "bundled_model_ceiling", isolated: true, bundled: true, ceiling: true, success: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.hookSource != "" && runtime.GOOS != "windows" {
@@ -175,6 +178,64 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			if err != nil || strings.TrimSpace(string(out)) != "codex-cli 0.156.1" {
 				t.Fatalf("capture contract is pinned to Codex0.156.1: %q (%v)", out, err)
 			}
+			expectedModel := "probe-isolation-fixture"
+			responsesLite := false
+			if tc.bundled {
+				// The pinned --bundled branch dumps embedded metadata without
+				// loading config/auth or refreshing an account's live catalog.
+				bundled := exec.CommandContext(ctx, cli, "debug", "models", "--bundled")
+				bundled.Env, bundled.Dir = env, cwd
+				bundled.WaitDelay = 2 * time.Second
+				data, err := bundled.Output()
+				if err != nil {
+					t.Fatal("native bundled model export failed", err)
+				}
+				var exported struct {
+					Models []map[string]json.RawMessage `json:"models"`
+				}
+				if err := json.Unmarshal(data, &exported); err != nil {
+					t.Fatal("invalid native bundled catalog", err)
+				}
+				var selected map[string]json.RawMessage
+				for _, model := range exported.Models {
+					var slug, visibility, patch, toolMode string
+					if json.Unmarshal(model["slug"], &slug) != nil || json.Unmarshal(model["visibility"], &visibility) != nil || json.Unmarshal(model["apply_patch_tool_type"], &patch) != nil || json.Unmarshal(model["tool_mode"], &toolMode) != nil {
+						continue
+					}
+					if slug != "" && visibility == "list" && patch == "freeform" && (toolMode == "code_mode" || toolMode == "code_mode_only") {
+						expectedModel, selected = slug, model
+						break
+					}
+				}
+				if selected == nil {
+					t.Fatal("native bundle has no visible model with the required code-mode/apply-patch control")
+				}
+				if value, ok := selected["use_responses_lite"]; ok {
+					if err := json.Unmarshal(value, &responsesLite); err != nil {
+						t.Fatal("invalid native wire-mode metadata", err)
+					}
+				}
+				if tc.ceiling {
+					// Preserve every other raw metadata field, including unknown fields.
+					selected["apply_patch_tool_type"] = json.RawMessage(`null`)
+					selected["experimental_supported_tools"] = json.RawMessage(`[]`)
+					selected["tool_mode"] = json.RawMessage(`null`)
+				}
+				data, err = json.Marshal(map[string]any{"models": []map[string]json.RawMessage{selected}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				write(catalog, string(data))
+				encodedModel, err := json.Marshal(expectedModel)
+				if err != nil {
+					t.Fatal(err)
+				}
+				config = strings.Replace(config, `model = "probe-isolation-fixture"`, "model = "+string(encodedModel), 1)
+				// This overrides a model-owned multi-agent version; feature opt-outs
+				// alone do not override that metadata in the pinned Config resolver.
+				config += "\n[agents]\nenabled = false\n"
+				write(filepath.Join(home, "config.toml"), config)
+			}
 			args := []string{"exec", "--json", "--ephemeral", "--skip-git-repo-check", "--strict-config", "-C", cwd}
 			if tc.hookSource != "" {
 				// Trust only test-created synthetic hooks for this invocation. Both
@@ -217,7 +278,9 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 				Instructions string            `json:"instructions"`
 				Tools        []json.RawMessage `json:"tools"`
 				Input        []struct {
-					Role    string `json:"role"`
+					Type    string            `json:"type"`
+					Role    string            `json:"role"`
+					Tools   []json.RawMessage `json:"tools"`
 					Content []struct {
 						Text string `json:"text"`
 					} `json:"content"`
@@ -226,8 +289,28 @@ func TestCodexProbeIsolationCapture(t *testing.T) {
 			if err := json.Unmarshal(raw, &request); err != nil {
 				t.Fatal(err)
 			}
-			if request.Model != "probe-isolation-fixture" || request.Instructions != "Reply OK." || strings.Contains(string(raw), "PROBE_PROJECT_CANARY_8F32") {
-				t.Fatal("unexpected model/instructions or leaked project canary")
+			if tc.bundled && responsesLite {
+				// Preserve the real model's wire mode. The pinned lite request moves
+				// tools to additional_tools and base instructions to developer input.
+				var fields map[string]json.RawMessage
+				if err := json.Unmarshal(raw, &fields); err != nil {
+					t.Fatal(err)
+				}
+				if _, present := fields["tools"]; present {
+					t.Fatal("unexpected root tools in lite request")
+				}
+				if _, present := fields["instructions"]; present {
+					t.Fatal("unexpected root instructions in lite request")
+				}
+				if len(request.Input) != 3 || request.Input[0].Type != "additional_tools" || request.Input[0].Role != "developer" || request.Input[0].Tools == nil || len(request.Input[0].Content) != 0 || request.Input[1].Type != "message" || request.Input[1].Role != "developer" || len(request.Input[1].Content) != 1 || request.Input[1].Content[0].Text != "Reply OK." || request.Input[2].Type != "message" {
+					t.Fatal("unexpected native lite instruction placement or extra context")
+				}
+				request.Tools = request.Input[0].Tools
+				request.Instructions = request.Input[1].Content[0].Text
+				request.Input = request.Input[2:]
+			}
+			if request.Model != expectedModel || request.Instructions != "Reply OK." || strings.Contains(string(raw), "PROBE_PROJECT_CANARY_8F32") {
+				t.Fatalf("model=%q expected=%q minimal_instructions=%t project_canary=%t", request.Model, expectedModel, request.Instructions == "Reply OK.", strings.Contains(string(raw), "PROBE_PROJECT_CANARY_8F32"))
 			}
 			if tc.hookControl {
 				if len(request.Tools) != 0 || len(request.Input) < 2 {
