@@ -46,6 +46,35 @@ The whole optional memory section stays below8192 bytes. CLI outputs typed JSON;
 malformed receipts fail and raw HTTP error bodies are omitted. No automatic retry.
 There is no UI in this increment.
 
+## Read-only report drafts (#161)
+
+`multica project continuity draft <project-id>` calls authenticated human-member
+GET `/api/projects/{id}/continuity/draft`. It derives a preview on demand from the
+latest eligible completed issue task. It does not call a model, write a checkpoint,
+or deliver the draft to agents. It returns the current checkpoint, source identity,
+current issue revision/status, completion time, source fingerprint and an explicitly
+unreviewed report excerpt. Completion is not acceptance. Only the final `output`
+field is considered; other result fields are excluded. Known credential patterns
+are redacted, not a guarantee that arbitrary private content is safe to publish.
+
+New issue claims capture their resolved project and explicit task squad binding
+in the existing issue snapshot. Draft lookup requires matching project/workspace
+and captured scope. Old tasks without that provenance, tasks moved from another
+project, explicit squad tasks and tasks without issues are ineligible. This does
+not identify implicit squad membership or implement squad-private memory.
+
+The report excerpt is capped at1200 UTF-8 bytes with an explicit truncation flag.
+If appending it exceeds checkpoint limits, `suggested_content` is null and the
+reason is `checkpoint_budget_exceeded`; existing content is never shortened.
+An unavailable source has `available=false` and no suggestion. No history scan
+or fallback to another project occurs. Review the full source when needed.
+
+Inspect the report and current source, edit a concise checkpoint, then use the
+existing `set --file` with `current.revision` as `expected_revision`. The source
+SHA256 identifies the stored result/issue identity; it is not a code freshness
+check, approval token or atomic source revalidation at publication. Reconsult
+mutable sources before publishing. GET alone never publishes anything.
+
 ## Delivery, limits and first pilot
 
 The claim resolver appends JSON-quoted content with project/revision/publisher/time

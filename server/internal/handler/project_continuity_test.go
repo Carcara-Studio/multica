@@ -89,6 +89,7 @@ func TestProjectContinuityAuthorizationAndInvalidInput(t *testing.T) {
 				status = 404
 			}
 			testutil.Call(t, testHandler.SetProjectContinuity, req).Want(status)
+			testutil.Call(t, testHandler.GetProjectContinuityDraft, req).Want(status)
 		})
 	}
 }

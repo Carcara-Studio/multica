@@ -75,6 +75,14 @@ type issueStateSnapshot struct {
 	Version           int    `json:"v"`
 	TitleSHA256       string `json:"title_sha256"`
 	DescriptionSHA256 string `json:"description_sha256"`
+	// Optional provenance, not an added issue-delta comparison field. Old
+	// snapshots remain valid for deltas but cannot source continuity drafts.
+	ContinuityScope *continuityClaimScope `json:"continuity_scope,omitempty"`
+}
+
+type continuityClaimScope struct {
+	ProjectID string `json:"project_id"`
+	SquadID   string `json:"squad_id"`
 }
 
 func sha256Hex(s string) string {

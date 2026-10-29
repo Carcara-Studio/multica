@@ -15,6 +15,34 @@ import (
 
 const continuityTestID = "11111111-1111-4111-8111-111111111111"
 
+func TestProjectContinuityCLIDraftValidatesReceipt(t *testing.T) {
+	for _, malformed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "valid", true: "malformed"}[malformed], func(t *testing.T) {
+			continuityCLISetup(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" || r.URL.Path != "/api/projects/"+continuityTestID+"/continuity/draft" {
+					t.Error("wrong draft request")
+				}
+				if malformed {
+					_, _ = w.Write([]byte(`{"version":1,"available":true}`))
+					return
+				}
+				_ = json.NewEncoder(w).Encode(projectmemory.EmptyDraft(projectmemory.Checkpoint{ProjectID: continuityTestID}, "no_eligible_completed_task"))
+			})
+			cmd := newProjectContinuityCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetArgs([]string{"draft", continuityTestID})
+			err := cmd.Execute()
+			if (err != nil) != malformed {
+				t.Fatalf("unexpected receipt validation: %v", err)
+			}
+			if !malformed && !strings.Contains(out.String(), "no_eligible_completed_task") {
+				t.Fatal("missing draft receipt")
+			}
+		})
+	}
+}
+
 func continuityCLISetup(t *testing.T, handler http.HandlerFunc) {
 	t.Helper()
 	t.Chdir(t.TempDir())

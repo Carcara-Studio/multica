@@ -12,6 +12,8 @@ independently authorize additional delivery work.
 On2026-10-29 the maintainer explicitly paused R4 and prioritized persistent memory.
 The bounded project continuity pilot (#159, ADR-040) is an approved scope addition;
 its current acceptance contract is [PROJECT_CONTINUITY.md](PROJECT_CONTINUITY.md).
+Follow-up #161 adds an on-demand unreviewed report preview with captured claim
+scope; publication remains explicit through the existing checkpoint CAS.
 It does not reopen R1-R3/R5 or activate R4. The R4 row below describes unfinished
 work retained for a later explicit resume; no fallback work is active now.
 
