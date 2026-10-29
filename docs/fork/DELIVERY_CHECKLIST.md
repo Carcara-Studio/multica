@@ -9,6 +9,12 @@ independently authorize additional delivery work.
 
 ## Fixed scope and completion criteria
 
+On2026-10-29 the maintainer explicitly paused R4 and prioritized persistent memory.
+The bounded project continuity pilot (#159, ADR-040) is an approved scope addition;
+its current acceptance contract is [PROJECT_CONTINUITY.md](PROJECT_CONTINUITY.md).
+It does not reopen R1-R3/R5 or activate R4. The R4 row below describes unfinished
+work retained for a later explicit resume; no fallback work is active now.
+
 R1 is delivered by #98 / PR #99, R2 by #100 / PR #101 and R3 by #102 / PR #103; R4 is in implementation and remains disabled; R5 passed its bounded Windows/account and accepted upstream-baseline criteria on 2026-10-27. A helper, audit, mock test
 or foundation PR alone is not completion of an item. Maintain evidence here as
 work lands; do not replace these identifiers with new phases.

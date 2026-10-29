@@ -341,6 +341,11 @@ func (c *APIClient) DeleteJSONResponse(ctx context.Context, path string, out any
 
 // DeleteJSONWithBody performs a DELETE request with a JSON body.
 func (c *APIClient) DeleteJSONWithBody(ctx context.Context, path string, body any) error {
+	return c.DeleteJSONWithBodyResponse(ctx, path, body, nil)
+}
+
+// DeleteJSONWithBodyResponse also decodes a JSON receipt (for retained CAS revisions).
+func (c *APIClient) DeleteJSONWithBodyResponse(ctx context.Context, path string, body any, out any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -361,6 +366,9 @@ func (c *APIClient) DeleteJSONWithBody(ctx context.Context, path string, body an
 
 	if resp.StatusCode >= 400 {
 		return newHTTPError(http.MethodDelete, path, resp)
+	}
+	if out != nil {
+		return wrapBodyRead(req, json.NewDecoder(resp.Body).Decode(out))
 	}
 	return nil
 }

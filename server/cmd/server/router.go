@@ -2159,6 +2159,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetProject)
 					r.Put("/", h.UpdateProject)
+					r.Get("/continuity", h.GetProjectContinuity)
+					r.Put("/continuity", h.SetProjectContinuity)
+					r.Delete("/continuity", h.ClearProjectContinuity)
 					r.Delete("/", h.DeleteProject)
 					r.Post("/workflow", h.SetProjectWorkflow)
 					r.Get("/resources", h.ListProjectResources)

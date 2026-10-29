@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/projectmemory"
 	agentpkg "github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -984,6 +985,14 @@ func (h *Handler) resolveClaimProjectContext(ctx context.Context, projectID, wor
 			out.ProjectID = uuidToString(project.ID)
 			out.Title = project.Title
 			out.Description = project.Description.String
+			if checkpoint := projectCheckpoint(project); checkpoint.Content != "" {
+				withMemory, memoryErr := projectmemory.Append(out.Description, checkpoint)
+				if memoryErr != nil {
+					slog.Warn("claim: invalid optional project continuity omitted", "project_id", out.ProjectID)
+				} else {
+					out.Description = withMemory
+				}
+			}
 
 			rows, resErr := h.Queries.ListProjectResourcesInWorkspace(ctx, db.ListProjectResourcesInWorkspaceParams{
 				ProjectID:   project.ID,
