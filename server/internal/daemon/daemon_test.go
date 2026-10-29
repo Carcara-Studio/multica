@@ -4387,6 +4387,69 @@ func TestExecuteAndDrain_PiTurnErrorOutranksUpstreamCancellation(t *testing.T) {
 	}
 }
 
+func TestExecuteAndDrain_CancellationAfterResultHandoff(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		boundary      bool
+		authoritative bool
+		status        string
+		wantCancelled bool
+	}{
+		{name: "unobserved_abort", boundary: true, status: "aborted", wantCancelled: true},
+		{name: "observed_failure", boundary: true, authoritative: true, status: "failed"},
+		{name: "observed_completion", boundary: true, authoritative: true, status: "completed"},
+		{name: "legacy_without_boundary", status: "completed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newTestDaemon(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			messages := make(chan agent.Message)
+			results := make(chan agent.Result)
+			session := &agent.Session{Messages: messages, Result: results}
+			if tc.boundary {
+				session.TerminalObserved = func() bool { return tc.authoritative }
+			}
+			type outcome struct {
+				result agent.Result
+				err    error
+			}
+			done := make(chan outcome, 1)
+			go func() {
+				result, _, err := d.executeAndDrain(ctx, sessionBackend{session: session}, "fixture", agent.ExecOptions{}, slog.Default(), "cancel-handoff", "", new(atomic.Int32))
+				done <- outcome{result, err}
+			}()
+			original := agent.Result{Status: tc.status, Error: "fixture disposition", SessionID: "fixture-session", DurationMs: 7}
+			// An unbuffered handoff selects the Result branch before cancellation.
+			// Keeping Messages open prevents its final drain from finishing first.
+			select {
+			case results <- original:
+			case <-time.After(5 * time.Second):
+				close(messages)
+				t.Fatal("result was not received")
+			}
+			cancel()
+			close(messages)
+			close(results)
+			select {
+			case got := <-done:
+				if got.err != nil {
+					t.Fatal(got.err)
+				}
+				if tc.wantCancelled {
+					if got.result.Status != "cancelled" || !strings.Contains(got.result.Error, "task cancelled by upstream context") {
+						t.Fatalf("result = %+v, want upstream cancellation after unobserved handoff", got.result)
+					}
+				} else if got.result.Status != original.Status || got.result.Error != original.Error || got.result.SessionID != original.SessionID || got.result.DurationMs != original.DurationMs {
+					t.Fatalf("result = %+v, want original disposition %+v", got.result, original)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("result handoff did not finish")
+			}
+		})
+	}
+}
+
 func TestExecuteAndDrain_PiWithoutTurnErrorKeepsUpstreamCancellation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell-script fixture is POSIX-only")

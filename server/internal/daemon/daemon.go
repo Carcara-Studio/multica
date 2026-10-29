@@ -9797,6 +9797,15 @@ func (d *Daemon) executeAndDrain(ctx context.Context, backend agent.Backend, pro
 			if result.Error == "" {
 				result.Error = idleWatchdogReason(time.Duration(idleWatchdogThreshold.Load()))
 			}
+		} else if handsOverTerminal && errors.Is(ctx.Err(), context.Canceled) && !terminalObserved() {
+			// Match the cancellation branch even when Result won the select.
+			// A participating backend's unobserved abort cannot outrank an
+			// upstream cancel; observed provider outcomes and legacy backends
+			// retain their existing result disposition.
+			return agent.Result{
+				Status: "cancelled",
+				Error:  "task cancelled by upstream context (server cancel or daemon shutdown)",
+			}, toolCount.Load(), nil
 		}
 		return result, toolCount.Load(), nil
 	case <-drainCtx.Done():
