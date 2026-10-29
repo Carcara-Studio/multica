@@ -60,6 +60,33 @@ No global CLI installation or configuration change is needed. The `windows.mxc`
 override belongs only to the synthetic configuration; the experiment does not
 change a user's sandbox policy.
 
+## Synthetic startup introspection
+
+`TestCodexProbeStartupIntrospection` uses the same opt-in environment and pinned
+native CLI. It starts only stdio app-server with strict config in a fresh
+synthetic home/workspace, performs initialize, config/read,
+configRequirements/read and paginated experimentalFeature/list, then terminates
+the process. It creates no thread or turn and uses no shared authentication.
+Run it explicitly with `-run '^TestCodexProbeStartupIntrospection$'`.
+
+The native Windows test observes raw unified_exec=false but effective
+unified_exec=true, while shell_tool, hooks and plugins remain false. Thus raw
+config/read flags alone are not an effective-feature admission check. Pagination
+must terminate without duplicate entries or oversized pages. Unknown config is
+rejected under strict-config. Requirements are loaded but neither printed nor
+certified: host-managed requirements can still make a real target ineligible.
+The fixture provider/MCP HTTP endpoint receives zero requests during this bounded
+exercise. This does not monitor all network traffic or subprocesses and is not
+proof of universal startup isolation. The test does not exercise project-layer
+overrides, startup hooks, marketplace synchronization or actual model inference.
+
+Pinned app-server initializes its message processor before handling these RPCs.
+That constructor can schedule plugin startup tasks; core-plugins gates those
+tasks on plugins_enabled. The disable-plugin-startup-tasks-for-tests switch is
+debug-only, not a release isolation control. No real-profile introspection is
+approved by this test. A snapshot from this synthetic process does not authorize
+another process, configuration or inference.
+
 ## Remaining gates
 
 Do not copy this fixture catalog into production or treat a disabled-tool prompt
