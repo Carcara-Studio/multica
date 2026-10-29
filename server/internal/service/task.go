@@ -3834,6 +3834,9 @@ func (s *TaskService) FinalizeTaskClaim(
 			}
 		}
 		if _, err := qtx.CreateTaskToken(ctx, token); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return unresolvedExecutionRouteError()
+			}
 			return fmt.Errorf("create task token: %w", err)
 		}
 		if len(daemonTokens) == 1 {
@@ -4242,6 +4245,16 @@ func (s *TaskService) StartTaskForClaim(ctx context.Context, claim db.LockAgentT
 	task, err := qtx.LockAgentTaskStartClaim(ctx, claim)
 	if err != nil {
 		return nil, fmt.Errorf("lock task start claim: %w", err)
+	}
+	// Even a running replay cannot acknowledge an unresolved persisted route.
+	// This reads only an existence marker after the task lock, never owner/config
+	// rows; the future resolver must preserve the existing lock graph.
+	routed, err := qtx.AgentTaskHasExecutionRoute(ctx, task.ID)
+	if err != nil {
+		return nil, fmt.Errorf("check task execution route: %w", err)
+	}
+	if routed {
+		return nil, unresolvedExecutionRouteError()
 	}
 	var change *qoderIssueChange
 	replay := task.Status == "running"

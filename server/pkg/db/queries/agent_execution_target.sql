@@ -115,6 +115,11 @@ RETURNING *;
 -- name: GetAgentTaskExecutionRoute :one
 SELECT * FROM agent_task_execution_route WHERE task_id = @task_id AND workspace_id = @workspace_id;
 
+-- name: AgentTaskHasExecutionRoute :one
+-- Internal launch veto only; returns no route/configuration or workspace data.
+-- Check any marker, including one whose historical metadata is now orphaned.
+SELECT EXISTS (SELECT 1 FROM agent_task_execution_route WHERE task_id = @task_id) AS routed;
+
 -- name: CopyAgentTaskExecutionRouteForRetry :one
 -- Retries inherit the parent's proof even after config removal/recovery. This
 -- preserves lineage, not launch permission: claim must validate current epochs.

@@ -13,7 +13,8 @@ import (
 
 const createTaskToken = `-- name: CreateTaskToken :one
 INSERT INTO task_token (token_hash, task_id, agent_id, workspace_id, user_id, expires_at, id)
-VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::uuid, gen_random_uuid()))
+SELECT $1, $2, $3, $4, $5, $6, COALESCE($7::uuid, gen_random_uuid())
+WHERE NOT EXISTS (SELECT 1 FROM agent_task_execution_route WHERE task_id = $2::uuid)
 RETURNING id, token_hash, task_id, agent_id, workspace_id, user_id, expires_at, created_at
 `
 
@@ -27,6 +28,8 @@ type CreateTaskTokenParams struct {
 	ID          pgtype.UUID        `json:"id"`
 }
 
+// Persisted execution routes require an approved resolver before credentials
+// may be delivered. R4 has no production resolver yet, including primary routes.
 func (q *Queries) CreateTaskToken(ctx context.Context, arg CreateTaskTokenParams) (TaskToken, error) {
 	row := q.db.QueryRow(ctx, createTaskToken,
 		arg.TokenHash,
