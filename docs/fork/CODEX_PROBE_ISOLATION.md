@@ -7,7 +7,7 @@ production recovery adapter or permission to enable fallback.
 
 On Windows with the existing standalone Codex CLI 0.156.1, the opt-in
 `TestCodexProbeIsolationCapture` sends one request per case to a localhost fake
-Responses provider. Five cases deliberately return HTTP400 `MOCK_CAPTURE_ONLY`.
+Responses provider. Nine cases deliberately return HTTP400 `MOCK_CAPTURE_ONLY`.
 One returns synthetic SSE success, verifying native CLI JSON `turn.started`,
 `turn.completed` and the final `OK` message in addition to exit status. No actual
 model/account inference or recovery is claimed.
@@ -18,7 +18,8 @@ environment allowlist without inherited credentials/proxies/provider overrides.
 No shared auth file is copied. The endpoint records no headers. The model name
 is a fixture, not an eligible production model or evidence of account access.
 
-Six cases use the same native executable:
+Ten cases use the same native executable (the four command-hook cases are
+Windows-specific):
 
 - Without the final goal/skill controls, the request exposes native goal tools
   and automatic skill instructions despite the other tools being disabled.
@@ -35,6 +36,18 @@ Six cases use the same native executable:
 - Removing those explicit model-tool declarations supplies a fixture catalog
   ceiling: zero tools/minimal input, followed by native completion of the local
   synthetic stream. This does not replace a production source of real metadata.
+- User and trusted project SessionStart hooks each have a positive control and
+  a blocked control. The PowerShell canary writes a marker under the synthetic
+  test root and emits a unique context string. Each positive control requires
+  the marker before the provider request and the extra hook context in that
+  request. The project fixture has minimal local Git metadata and explicitly
+  trusts its native Windows path spelling; no real repository is used.
+- Both hook controls apply trust bypass only to these known test-created sources
+  for that invocation, so missing hook trust cannot explain the blocked outcome.
+  The blocked cases pass `-c features.hooks=false` while user/project config
+  enables hooks. They require no marker before or after the request, no hook
+  context, zero tools and the original single minimal user input. Do not use
+  this trust bypass for a real-profile recovery probe.
 
 The executable version is checked before the cases run. A different version
 fails this pinned contract until reviewed; the opt-in gate precedes executable
@@ -43,6 +56,9 @@ not an OS-level audit of startup side effects or absence of all managed hooks.
 The process working directory and configuration cwd are both the synthetic
 workspace. JSON stdout is parsed separately from stderr; native status/answer
 events must accompany synthetic success. No model tool calls are emitted by the
+provider. Commands have a35-second context and a two-second pipe WaitDelay;
+this bounds inherited-pipe waits, not all detached process lifetimes. Run the
+whole opt-in capture with a bounded Go test timeout, for example `-timeout 3m`.
 fake provider, including the negative controls.
 
 ## Reproduce
@@ -127,3 +143,9 @@ The automatic fallback and probe schedulers remain disabled.
 The internal extension ToolPolicy is not itself a public thread/turn parameter.
 The capture tests the available startup configuration instead of asserting that
 an internal policy can be supplied by the Multica daemon.
+
+The Windows hook controls cover ordinary user/project command hooks in the
+pinned executable. They do not establish suppression of managed/required hooks,
+plugin/MCP handlers, every lifecycle event, all network activity or detached
+processes. An incompatible managed policy must remain ineligible. These controls
+do not approve a native-login adapter, actual model metadata or real inference.
