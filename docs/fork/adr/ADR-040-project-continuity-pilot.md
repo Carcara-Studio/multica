@@ -51,6 +51,16 @@ are outside this first increment, not silently claimed as implemented.
 
 ## Acceptance
 
+### Follow-up #161: derived report preview
+
+After the first delivery pilot, allow a human-only read endpoint/CLI to derive a
+bounded, unreviewed final-report draft without another model call or persistent
+draft store. Capture resolved project/explicit squad provenance in new issue
+claim snapshots; missing/mismatched scope fails closed. No automatic publication,
+source freshness claim, squad-private collection or change to issue-body delta
+comparison is authorized by this addition. Existing CAS publication remains the
+only path that makes the reviewed checkpoint available to subsequent tasks.
+
 Native PostgreSQL tests must show publish/read/CAS/clear/recreate and concurrent
 conflict, member authorization and project/workspace isolation. A scoped checkpoint
 must appear in the shared claim context and disappear after clearing. CLI tests

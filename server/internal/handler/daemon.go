@@ -2782,15 +2782,6 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 		// was actually handed. Building it here, from the issue row already
 		// loaded, is what makes the snapshot mean "the issue as of this claim".
 		currentSnapshot := buildIssueStateSnapshot(issue)
-		if encoded, err := json.Marshal(currentSnapshot); err != nil {
-			// A snapshot that cannot be encoded is simply not recorded; the
-			// next run reports "not compared" and reads the issue, which is
-			// the behaviour that predates the column.
-			slog.Warn("claim: could not encode issue snapshot",
-				"task_id", uuidToString(task.ID), "issue_id", uuidToString(task.IssueID), "error", err)
-		} else {
-			issueSnapshot = encoded
-		}
 		// Both deltas are computed AFTER the resume source is resolved, further
 		// down, because both must be measured from the run whose session this
 		// claim actually hands back — see resumeAnchor there.
@@ -2897,6 +2888,12 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 			}
 		}
 		projectCtx.applyTo(&resp)
+		currentSnapshot.ContinuityScope = &continuityClaimScope{ProjectID: projectCtx.ProjectID, SquadID: uuidToString(task.SquadID)}
+		if encoded, err := json.Marshal(currentSnapshot); err != nil {
+			slog.Warn("claim: could not encode issue snapshot", "task_id", uuidToString(task.ID), "error", err)
+		} else {
+			issueSnapshot = encoded
+		}
 		h.appendProjectHierarchyBriefing(r.Context(), &resp, *task, issue)
 		// Project workflow (MUL-7420): best-effort, like the status catalog
 		// below — a failure degrades to the workspace-wide status rules.

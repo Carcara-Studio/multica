@@ -16,10 +16,10 @@ import (
 
 func newProjectContinuityCmd() *cobra.Command {
 	group := &cobra.Command{Use: "continuity", Short: "Publish or read a bounded project continuity checkpoint"}
-	for _, action := range []string{"get", "set", "clear"} {
+	for _, action := range []string{"get", "set", "clear", "draft"} {
 		cmd := &cobra.Command{Use: action + " <project-id>", Short: action + " the project continuity checkpoint", Args: exactArgs(1)}
 		cmd.RunE = func(cmd *cobra.Command, args []string) error { return runProjectContinuity(cmd, args, action) }
-		if action != "get" {
+		if action == "set" || action == "clear" {
 			cmd.Flags().String("file", "", "Request JSON file; - reads stdin (includes expected_revision)")
 			_ = cmd.MarkFlagRequired("file")
 		}
@@ -75,7 +75,7 @@ func runProjectContinuity(cmd *cobra.Command, args []string, action string) erro
 	}
 	var raw json.RawMessage
 	var err error
-	if action != "get" {
+	if action == "set" || action == "clear" {
 		raw, err = readContinuityRequest(cmd, action)
 		if err != nil {
 			return err
@@ -89,7 +89,10 @@ func runProjectContinuity(cmd *cobra.Command, args []string, action string) erro
 	defer cancel()
 	path := "/api/projects/" + url.PathEscape(args[0]) + "/continuity"
 	var checkpoint projectmemory.Checkpoint
+	var draft projectmemory.Draft
 	switch action {
+	case "draft":
+		err = client.GetJSON(ctx, path+"/draft", &draft)
 	case "get":
 		err = client.GetJSON(ctx, path, &checkpoint)
 	case "set":
@@ -109,6 +112,12 @@ func runProjectContinuity(cmd *cobra.Command, args []string, action string) erro
 			return &safe
 		}
 		return fmt.Errorf("continuity request failed; check connection and response")
+	}
+	if action == "draft" {
+		if !draft.Valid() {
+			return fmt.Errorf("invalid continuity draft response")
+		}
+		return cli.PrintJSON(cmd.OutOrStdout(), draft)
 	}
 	if !checkpoint.Valid() || (action == "set" && checkpoint.Content == "") || (action == "clear" && checkpoint.Content != "") {
 		return fmt.Errorf("invalid continuity receipt; publication could not be confirmed")

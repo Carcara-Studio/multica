@@ -2160,6 +2160,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/", h.GetProject)
 					r.Put("/", h.UpdateProject)
 					r.Get("/continuity", h.GetProjectContinuity)
+					r.Get("/continuity/draft", h.GetProjectContinuityDraft)
 					r.Put("/continuity", h.SetProjectContinuity)
 					r.Delete("/continuity", h.ClearProjectContinuity)
 					r.Delete("/", h.DeleteProject)
