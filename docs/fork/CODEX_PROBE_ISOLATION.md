@@ -56,10 +56,10 @@ not an OS-level audit of startup side effects or absence of all managed hooks.
 The process working directory and configuration cwd are both the synthetic
 workspace. JSON stdout is parsed separately from stderr; native status/answer
 events must accompany synthetic success. No model tool calls are emitted by the
-provider. Commands have a35-second context and a two-second pipe WaitDelay;
+fake provider, including the negative controls. Commands have a 35-second context
+and a two-second pipe WaitDelay;
 this bounds inherited-pipe waits, not all detached process lifetimes. Run the
 whole opt-in capture with a bounded Go test timeout, for example `-timeout 3m`.
-fake provider, including the negative controls.
 
 ## Reproduce
 
