@@ -128,13 +128,18 @@ func TestCodexProbeStartupIntrospection(t *testing.T) {
 			} `json:"config"`
 		}
 		rpc("config/read", map[string]any{"includeLayers": false, "cwd": cwd}, &raw)
-		if raw.Config.Features["unified_exec"] || raw.Config.Features["shell_tool"] {
-			t.Fatal("fixture raw flags unexpectedly enabled")
+		for _, name := range []string{"unified_exec", "shell_tool"} {
+			if value, present := raw.Config.Features[name]; !present || value {
+				t.Fatal("fixture raw flag missing or unexpectedly enabled")
+			}
 		}
 		var requirements struct {
 			Requirements json.RawMessage `json:"requirements"`
 		}
 		rpc("configRequirements/read", map[string]any{}, &requirements)
+		if len(requirements.Requirements) == 0 {
+			t.Fatal("requirements response omitted the requirements field")
+		}
 		// Requirements can be supplied by the host. Never print their payload or
 		// certify an unknown managed policy merely because this RPC succeeded.
 		features := map[string]bool{}
@@ -177,6 +182,9 @@ func TestCodexProbeStartupIntrospection(t *testing.T) {
 			if !ok || got != want {
 				t.Fatalf("effective feature %s: present=%t enabled=%t want=%t", name, ok, got, want)
 			}
+		}
+		if len(features) <= 7 {
+			t.Fatal("fixture did not exercise multiple feature pages")
 		}
 		if contacts.Load() != 0 {
 			t.Fatal("synthetic provider/MCP contacted during introspection")
