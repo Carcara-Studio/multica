@@ -121,6 +121,7 @@ func TestOpencodeV2TaskIdentityConnection(t *testing.T) {
 	}{
 		{"opencode v2.0.28", false},
 		{"opencode v2.2.2", false},
+		{"opencode v2.2.3", false},
 		{"opencode v2.2.3", true},
 	} {
 		t.Run(tc.version, func(t *testing.T) {
@@ -173,6 +174,7 @@ printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
 		}
 		if native {
 			backend.(*opencodeBackend).cfg.Env["NATIVE_SESSION_ENV"] = "yes"
+			backend.(*opencodeBackend).cfg.Env["MULTICA_OPENCODE_NATIVE_SESSION_ENV"] = "1"
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		session, err := backend.Execute(ctx, "fixture", ExecOptions{
@@ -699,6 +701,7 @@ func testOpencodeV2CancelConnection(t *testing.T, native bool) {
 	if native {
 		cfg.CLIVersion = "opencode v2.2.3"
 		cfg.Env["MULTICA_TOKEN"] = "mat_fake_cancel"
+		cfg.Env["MULTICA_OPENCODE_NATIVE_SESSION_ENV"] = "1"
 	}
 	backend, err := New("opencode", cfg)
 	if err != nil {

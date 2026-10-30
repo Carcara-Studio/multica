@@ -55,7 +55,8 @@ func TestOpencodeNativeSessionEnvironmentSmoke(t *testing.T) {
 		backend, err := New("opencode", Config{
 			ExecutablePath: executable, CLIVersion: string(version), BuiltinRuntime: true, Logger: slog.Default(),
 			Env: map[string]string{
-				"MULTICA_TOKEN": "mat_fake_native_environment_smoke", "MULTICA_NATIVE_ENV_PROBE": marker,
+				"MULTICA_OPENCODE_NATIVE_SESSION_ENV": "1",
+				"MULTICA_TOKEN":                       "mat_fake_native_environment_smoke", "MULTICA_NATIVE_ENV_PROBE": marker,
 				"OPENAI_API_KEY": "", "NVIDIA_API_KEY": "", "OPENROUTER_API_KEY": "", "ANTHROPIC_API_KEY": "", "OPENCODE_API_KEY": "",
 			},
 		})

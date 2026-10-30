@@ -149,7 +149,9 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 		}
 		blockedArgs["--server"] = blockedWithValue
 		blockedArgs["--standalone"] = blockedStandalone
-		if !opencodeForwardsSessionEnvironment(b.cfg) {
+		// Session variables affect local shell commands, not the service's
+		// provider authentication/configuration. Keep this connection opt-in.
+		if !opencodeForwardsSessionEnvironment(b.cfg) || b.cfg.Env["MULTICA_OPENCODE_NATIVE_SESSION_ENV"] != "1" {
 			args = append(args, "--standalone")
 		}
 	}

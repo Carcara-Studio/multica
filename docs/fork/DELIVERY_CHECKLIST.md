@@ -48,6 +48,11 @@ probe execution/settlement.
 
 ## Current Windows validation evidence (2026-10-27)
 
+Later R5 compatibility maintenance: [ADR-041](adr/ADR-041-opencode-native-session-environment.md)
+records the opt-in OpenCode 2.2.3 native shell-environment connection, backward
+compatibility, provider-credential limitation and scoped Windows validation.
+This does not reopen R5 as a broader feature bucket or resume R4.
+
 The older incident notes below describe earlier test states. The later
 [Windows validation record](WINDOWS_VALIDATION_2026-10-27.md) supersedes their
 pending-smoke statements for the exact cases tested. On main `4e39c7dcf`, real
