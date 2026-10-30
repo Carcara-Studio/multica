@@ -88,19 +88,53 @@ func TestOpencodeModelArg(t *testing.T) {
 
 const testMCPConfig = `{"mcpServers":{"probe":{"command":"node","args":["probe.js"]}}}`
 
-// A fake resident service retains its first caller's environment. Task runs
-// must start private services so later agents cannot inherit that identity.
-func TestOpencodeV2TaskIdentityUsesPrivateServer(t *testing.T) {
+func TestOpencodeForwardsSessionEnvironment(t *testing.T) {
 	t.Parallel()
-	t.Run("default connection", func(t *testing.T) {
-		testOpencodeV2TaskIdentity(t, nil)
-	})
-	t.Run("custom connection cannot override isolation", func(t *testing.T) {
-		testOpencodeV2TaskIdentity(t, []string{"--server", "http://untrusted.invalid", "--server=http://other.invalid", "--standalone"})
-	})
+	for _, tc := range []struct {
+		version string
+		builtin bool
+		want    bool
+	}{
+		{"opencode v2.2.3", true, true},
+		{"2.3.0", true, true},
+		{"2.2.2", true, false},
+		{"1.18.31", true, false},
+		{"opencode nightly", true, false},
+		{"", true, false},
+		{"3.0.0", true, false},
+		{"2.2.3", false, false},
+	} {
+		cfg := Config{CLIVersion: tc.version, BuiltinRuntime: tc.builtin}
+		if got := opencodeForwardsSessionEnvironment(cfg); got != tc.want {
+			t.Errorf("version=%q builtin=%v: got %v, want %v", tc.version, tc.builtin, got, tc.want)
+		}
+	}
 }
 
-func testOpencodeV2TaskIdentity(t *testing.T, customArgs []string) {
+// Older clients inherit the resident service's startup identity. Newer clients
+// replace the environment per session and must use that native connection.
+func TestOpencodeV2TaskIdentityConnection(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		version string
+		native  bool
+	}{
+		{"opencode v2.0.28", false},
+		{"opencode v2.2.2", false},
+		{"opencode v2.2.3", true},
+	} {
+		t.Run(tc.version, func(t *testing.T) {
+			t.Run("default connection", func(t *testing.T) {
+				testOpencodeV2TaskIdentity(t, tc.version, tc.native, nil)
+			})
+			t.Run("custom connection cannot override isolation", func(t *testing.T) {
+				testOpencodeV2TaskIdentity(t, tc.version, tc.native, []string{"--server", "http://untrusted.invalid", "--server=http://other.invalid", "--standalone"})
+			})
+		})
+	}
+}
+
+func testOpencodeV2TaskIdentity(t *testing.T, version string, native bool, customArgs []string) {
 	t.Helper()
 	root := t.TempDir()
 	fakePath := filepath.Join(root, "opencode")
@@ -114,9 +148,10 @@ for arg in "$@"; do
   esac
 done
 identity="$MULTICA_AGENT_ID:$MULTICA_TASK_ID:$MULTICA_TOKEN"
+if [ "$private" = yes ] && [ "$NATIVE_SESSION_ENV" = yes ]; then exit 8; fi
 if [ "$private" = no ]; then
   if [ ! -f "$SERVICE_STATE" ]; then printf '%s' "$identity" > "$SERVICE_STATE"; fi
-  identity=$(cat "$SERVICE_STATE")
+  if [ "$NATIVE_SESSION_ENV" != yes ]; then identity=$(cat "$SERVICE_STATE"); fi
 fi
 printf '%s' "$identity" > "$IDENTITY_CAPTURE"
 printf '{"type":"step_start","sessionID":"ses","part":{}}\n'
@@ -126,7 +161,7 @@ printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
 	for _, marker := range []string{"math", "portuguese"} {
 		capture := filepath.Join(root, marker+".txt")
 		backend, err := New("opencode", Config{
-			ExecutablePath: fakePath, CLIVersion: "opencode v2.0.28", BuiltinRuntime: true,
+			ExecutablePath: fakePath, CLIVersion: version, BuiltinRuntime: true,
 			Logger: slog.Default(), Env: map[string]string{
 				"MULTICA_AGENT_ID": marker, "MULTICA_TASK_ID": "task-" + marker,
 				"MULTICA_TOKEN": "mat_fake_" + marker,
@@ -135,6 +170,9 @@ printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+		if native {
+			backend.(*opencodeBackend).cfg.Env["NATIVE_SESSION_ENV"] = "yes"
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		session, err := backend.Execute(ctx, "fixture", ExecOptions{
@@ -158,8 +196,12 @@ printf '{"type":"step_finish","sessionID":"ses","part":{}}\n'
 			t.Fatalf("task identity = %q, want %q", got, want)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "resident.txt")); !os.IsNotExist(err) {
-		t.Fatalf("task invocation used the shared resident service: %v", err)
+	_, err := os.Stat(filepath.Join(root, "resident.txt"))
+	if native && err != nil {
+		t.Fatalf("native session environment did not use the resident service: %v", err)
+	}
+	if !native && !os.IsNotExist(err) {
+		t.Fatalf("legacy client used the shared resident service: %v", err)
 	}
 }
 
@@ -621,6 +663,16 @@ func TestOpencodeInterruptSessionSurvivesFailure(t *testing.T) {
 // default service while the real session keeps working.
 func TestOpencodeV2CancelInterruptsThroughRunConnection(t *testing.T) {
 	t.Parallel()
+	t.Run("explicit service without task identity", func(t *testing.T) {
+		testOpencodeV2CancelConnection(t, false)
+	})
+	t.Run("native task environment", func(t *testing.T) {
+		testOpencodeV2CancelConnection(t, true)
+	})
+}
+
+func testOpencodeV2CancelConnection(t *testing.T, native bool) {
+	t.Helper()
 
 	tempDir := t.TempDir()
 	capture := filepath.Join(tempDir, "interrupt.txt")
@@ -637,13 +689,18 @@ func TestOpencodeV2CancelInterruptsThroughRunConnection(t *testing.T) {
 		"while :; do sleep 1; done\n"
 	writeTestExecutable(t, fakePath, []byte(script))
 
-	backend, err := New("opencode", Config{
+	cfg := Config{
 		ExecutablePath: fakePath,
 		CLIVersion:     "opencode v2.0.10",
 		BuiltinRuntime: true,
 		Logger:         slog.Default(),
 		Env:            map[string]string{"MULTICA_TEST_ENV": "task-marker"},
-	})
+	}
+	if native {
+		cfg.CLIVersion = "opencode v2.2.3"
+		cfg.Env["MULTICA_TOKEN"] = "mat_fake_cancel"
+	}
+	backend, err := New("opencode", cfg)
 	if err != nil {
 		t.Fatalf("new opencode backend: %v", err)
 	}
@@ -679,11 +736,17 @@ func TestOpencodeV2CancelInterruptsThroughRunConnection(t *testing.T) {
 	got := string(raw)
 	for _, want := range []string{
 		"/api/session/ses_live/interrupt",
-		"--server", "http://127.0.0.1:54321",
 		"env=task-marker",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("cancel lost %q from the run connection:\n%s", want, got)
 		}
+	}
+	if native {
+		if strings.Contains(got, "--server") || strings.Contains(got, "--standalone") {
+			t.Fatalf("native task cancellation bypassed the managed service:\n%s", got)
+		}
+	} else if !strings.Contains(got, "--server") || !strings.Contains(got, "http://127.0.0.1:54321") {
+		t.Fatalf("cancel lost the explicit service connection:\n%s", got)
 	}
 }

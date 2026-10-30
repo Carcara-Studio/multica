@@ -69,6 +69,18 @@ func opencodeUsesV2Contract(cfg Config) bool {
 	return version.Major >= 2
 }
 
+// The built-in CLI was verified to replace the shell environment per session
+// from 2.2.3 onward. Explicit --server connections bypass that forwarding, so
+// task invocations must keep the CLI's managed-service connection. Older or
+// unknown contracts still need a private process to receive task credentials.
+func opencodeForwardsSessionEnvironment(cfg Config) bool {
+	if !cfg.BuiltinRuntime {
+		return false
+	}
+	version, err := parseSemver(strings.TrimSpace(cfg.CLIVersion))
+	return err == nil && version.Major == 2 && !version.lessThan(semver{Major: 2, Minor: 2, Patch: 3})
+}
+
 // opencodeModelArg folds a thinking level into the model string for the 2.x
 // contract, which has no `--variant` flag and instead reads the variant off the
 // model as `provider/model#variant`.
