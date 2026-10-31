@@ -140,16 +140,20 @@ func (b *opencodeBackend) Execute(ctx context.Context, prompt string, opts ExecO
 	}
 	blockedArgs := opencodeBlockedArgs
 	if usesV2 && b.cfg.Env["MULTICA_TOKEN"] != "" {
-		// A resident 2.x service keeps the environment it started with. Task
-		// credentials and identity must instead reach a private server for this
-		// invocation, including when another agent already started the service.
+		// Only the managed-service connection forwards newer clients' task
+		// environment per session. Do not let custom flags select another
+		// service or bypass that delivery. Older clients need a private server.
 		blockedArgs = make(map[string]blockedArgMode, len(opencodeBlockedArgs)+2)
 		for flag, mode := range opencodeBlockedArgs {
 			blockedArgs[flag] = mode
 		}
 		blockedArgs["--server"] = blockedWithValue
 		blockedArgs["--standalone"] = blockedStandalone
-		args = append(args, "--standalone")
+		// Session variables affect local shell commands, not the service's
+		// provider authentication/configuration. Keep this connection opt-in.
+		if !opencodeForwardsSessionEnvironment(b.cfg) || b.cfg.Env["MULTICA_OPENCODE_NATIVE_SESSION_ENV"] != "1" {
+			args = append(args, "--standalone")
+		}
 	}
 	args = append(args, filterCustomArgs(opts.CustomArgs, blockedArgs, b.cfg.Logger)...)
 	// The task prompt is delivered on stdin, never argv — see the StdinPipe
