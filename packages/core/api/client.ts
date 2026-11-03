@@ -1,5 +1,6 @@
 import { hierarchyEscalationPageSchema, type HierarchyEscalationPage } from "./hierarchy-escalation-schema";
 import { agentFallbackSchema, type AgentFallbackResponse, type FallbackRevision, type SaveAgentFallbackRequest } from "./agent-fallback-schema";
+import { parseContinuity, projectContinuitySchema, projectContinuityDraftSchema, type ProjectContinuity, type ProjectContinuityDraft } from "./project-continuity-schema";
 import type { ZodType } from "zod";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
 import type { WorkspaceWakeupPage, WorkspaceWakeupFilters } from "../types/issue-wakeup";
@@ -4130,6 +4131,25 @@ export class ApiClient {
 
   async deleteProject(id: string): Promise<void> {
     await this.fetch(`/api/projects/${id}`, { method: "DELETE" });
+  }
+
+  // Project continuity
+  async getProjectContinuity(id: string): Promise<ProjectContinuity> {
+    return parseContinuity(await this.fetch(`/api/projects/${encodeURIComponent(id)}/continuity`), projectContinuitySchema, id);
+  }
+
+  async getProjectContinuityDraft(id: string): Promise<ProjectContinuityDraft> {
+    return parseContinuity(await this.fetch(`/api/projects/${encodeURIComponent(id)}/continuity/draft`), projectContinuityDraftSchema, id);
+  }
+
+  async publishProjectContinuity(id: string, data: { expected_revision: string; content: string }): Promise<ProjectContinuity> {
+    const receipt = parseContinuity(await this.fetch(`/api/projects/${encodeURIComponent(id)}/continuity`, {
+      method: "PUT", body: JSON.stringify(data),
+    }), projectContinuitySchema, id);
+    if (!receipt.revision || receipt.revision === data.expected_revision || receipt.content !== data.content) {
+      throw new Error("Invalid project continuity publication receipt");
+    }
+    return receipt;
   }
 
   // Project resources

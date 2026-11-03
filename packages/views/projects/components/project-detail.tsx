@@ -29,6 +29,7 @@ import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor"
 import { PriorityIcon } from "../../issues/components/priority-icon";
 import { ProjectHierarchySection } from "./project-hierarchy-section";
 import { ProjectResourcesSection } from "./project-resources-section";
+import { ProjectContinuitySection } from "./project-continuity-section";
 import { ProjectStartDatePicker } from "./project-start-date-picker";
 import { ProjectDueDatePicker } from "./project-due-date-picker";
 import { ProjectWorkflowControl } from "../../workflows/project-workflow-row";
@@ -493,6 +494,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Resources */}
       <ProjectResourcesSection projectId={projectId} />
+      <ProjectContinuitySection projectId={projectId} />
     </div>
   );
 

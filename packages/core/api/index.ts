@@ -13,6 +13,8 @@ export type {
   ClientUsageRequest,
 } from "./client";
 export { parseWithFallback, setSchemaLogger } from "./schema";
+export type { ProjectContinuity, ProjectContinuityDraft } from "./project-continuity-schema";
+export { validContinuityContent } from "./project-continuity-schema";
 export type { ParseOptions } from "./schema";
 export type { AgentFallbackResponse, FallbackRevision, SaveAgentFallbackRequest } from "./agent-fallback-schema";
 export { DuplicateIssueErrorBodySchema } from "./schemas";
