@@ -14,6 +14,8 @@ The bounded project continuity pilot (#159, ADR-040) is an approved scope additi
 its current acceptance contract is [PROJECT_CONTINUITY.md](PROJECT_CONTINUITY.md).
 Follow-up #161 adds an on-demand unreviewed report preview with captured claim
 scope; publication remains explicit through the existing checkpoint CAS.
+Follow-up #165 exposes review/edit/draft consultation/publication in shared
+web/desktop project details, preserving input on failure/conflict and explicit CAS.
 It does not reopen R1-R3/R5 or activate R4. The R4 row below describes unfinished
 work retained for a later explicit resume; no fallback work is active now.
 

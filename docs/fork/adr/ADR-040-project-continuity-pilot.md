@@ -51,6 +51,16 @@ are outside this first increment, not silently claimed as implemented.
 
 ## Acceptance
 
+### Follow-up #165: daily web/desktop review
+
+The maintainer requested a practical review/publication workflow on2026-11-03.
+Expose existing read/draft/CAS publication in shared project details, with explicit
+editing and publication, source inspection and visible unavailable/error states.
+Keep local edits on failed/conflicting writes; never silently rebase or retry.
+No model call, automatic promotion, new storage, new privilege or R4 activation.
+CLI clear remains the removal path in this increment. Existing server gates and
+the checkpoint meaning are unchanged.
+
 ### Follow-up #161: derived report preview
 
 After the first delivery pilot, allow a human-only read endpoint/CLI to derive a

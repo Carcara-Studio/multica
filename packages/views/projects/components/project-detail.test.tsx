@@ -26,6 +26,7 @@ vi.mock("../../workflows/project-workflow-menu", () => ({ ProjectWorkflowMenu: (
 vi.mock("./project-hierarchy-section", () => ({
   ProjectHierarchySection: () => null,
 }));
+vi.mock("./project-continuity-section", () => ({ ProjectContinuitySection: () => null }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey?: readonly unknown[] }) => {

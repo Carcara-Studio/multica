@@ -92,6 +92,7 @@
     "./search-index": "./search-index/index.ts",
     "./projects": "./projects/index.ts",
     "./projects/queries": "./projects/queries.ts",
+    "./projects/continuity": "./projects/continuity.ts",
     "./projects/mutations": "./projects/mutations.ts",
     "./projects/config": "./projects/config.ts",
     "./plugins": "./plugins/index.ts",

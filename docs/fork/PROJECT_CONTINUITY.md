@@ -44,7 +44,29 @@ Get-Content -Raw checkpoint.json | multica project continuity set <project-id> -
 Input is bounded to16KiB; content limits are4000 UTF-8 /6000 JSON-encoded bytes.
 The whole optional memory section stays below8192 bytes. CLI outputs typed JSON;
 malformed receipts fail and raw HTTP error bodies are omitted. No automatic retry.
-There is no UI in this increment.
+The shared web/desktop project details include a Project memory section (#165).
+
+## Daily review and publication
+
+Open Project memory > Review memory in project details. The editor starts from
+the published checkpoint and its revision. Consult latest task report reads the
+existing eligible source on demand; it makes no model call or publication.
+Inspect the source task and unreviewed excerpt. Use suggestion loads a candidate
+only while there are no local edits and its checkpoint revision still matches.
+Otherwise copy useful details manually and write a concise summary.
+
+Publish memory performs the existing CAS write and closes only after a validated
+matching receipt. Errors preserve input. A conflict never silently rebases or
+retries: copy desired edits, then explicitly discard edits and load the published
+version before reviewing again. A failed/unconfirmed publication also offers that
+reload action. Background refreshes never replace an open editor's draft.
+
+An empty/unavailable/error result is visible; malformed responses are rejected
+without logging memory content. Limits match the server's UTF-8 and JSON budgets.
+Current project/workspace bound the queries, editor and writes. Source reports
+remain unverified; publishing records the member account, not acceptance of every
+claim. The UI uses existing server permissions. Clearing remains available via
+the CLI; no new storage, private squad memory or automatic promotion is added.
 
 ## Read-only report drafts (#161)
 
